@@ -9,10 +9,12 @@ import {cleanUpStatusAndProfileFetchingPoll} from 'mattermost-redux/actions/stat
 import {getIsUserStatusesConfigEnabled} from 'mattermost-redux/selectors/entities/common';
 
 import {addVisibleUsersInCurrentChannelAndSelfToStatusPoll} from 'actions/status_actions';
+import {getIsMobileView} from 'selectors/views/browser';
 
 import {makeAsyncComponent} from 'components/async_load';
 import CenterChannel from 'components/channel_layout/center_channel';
 import LoadingScreen from 'components/loading_screen';
+import QueryParamActionController from 'components/query_param_actions/query_param_action_controller';
 import Sidebar from 'components/sidebar';
 import CRTPostsChannelResetWatcher from 'components/threading/channel_threads/posts_channel_reset_watcher';
 import UnreadsStatusHandler from 'components/unreads_status_handler';
@@ -23,6 +25,7 @@ import {isInternetExplorer, isEdge} from 'utils/user_agent';
 
 const ProductNoticesModal = makeAsyncComponent('ProductNoticesModal', lazy(() => import('components/product_notices_modal')));
 const ResetStatusModal = makeAsyncComponent('ResetStatusModal', lazy(() => import('components/reset_status_modal')));
+const MobileSidebarRight = makeAsyncComponent('MobileSidebarRight', lazy(() => import('components/mobile_sidebar_right')));
 
 const BODY_CLASS_FOR_CHANNEL = ['app__body', 'channel-view'];
 
@@ -31,6 +34,7 @@ type Props = {
 }
 
 export default function ChannelController(props: Props) {
+    const isMobileView = useSelector(getIsMobileView);
     const enabledUserStatuses = useSelector(getIsUserStatusesConfigEnabled);
     const dispatch = useDispatch();
 
@@ -69,6 +73,7 @@ export default function ChannelController(props: Props) {
     return (
         <>
             <CRTPostsChannelResetWatcher/>
+            <QueryParamActionController/>
             <Sidebar/>
             <div
                 id='channel_view'
@@ -83,6 +88,7 @@ export default function ChannelController(props: Props) {
                     <ResetStatusModal/>
                 </div>
             </div>
+            {isMobileView && <MobileSidebarRight/>}
         </>
     );
 }

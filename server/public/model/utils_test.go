@@ -19,14 +19,14 @@ import (
 )
 
 func TestNewId(t *testing.T) {
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		id := NewId()
 		require.LessOrEqual(t, len(id), 26, "ids shouldn't be longer than 26 chars")
 	}
 }
 
 func TestRandomString(t *testing.T) {
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		str := NewRandomString(i)
 		require.Len(t, str, i)
 		require.NotContains(t, str, "=")
@@ -279,7 +279,7 @@ func TestSortedArrayFromJSON(t *testing.T) {
 	t.Run("Duplicate keys, returns one", func(t *testing.T) {
 		var ids []string
 		id := NewId()
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			ids = append(ids, id)
 		}
 		b, _ := json.Marshal(ids)
@@ -373,6 +373,10 @@ func TestIsValidEmail(t *testing.T) {
 			Expected: false,
 		},
 		{
+			Input:    "<billy@example.com>",
+			Expected: false,
+		},
+		{
 			Input:    "email.domain.com",
 			Expected: false,
 		},
@@ -394,6 +398,50 @@ func TestIsValidEmail(t *testing.T) {
 		},
 		{
 			Input:    "email1@domain.com, email2@domain.com",
+			Expected: false,
+		},
+		{
+			Input:    "\"attacker@attacker.com,admin\"@spaceship.com",
+			Expected: false,
+		},
+		{
+			Input:    "(email)@domain.com",
+			Expected: false,
+		},
+		{
+			Input:    "<email>@domain.com",
+			Expected: false,
+		},
+		{
+			Input:    "[email]@domain.com",
+			Expected: false,
+		},
+		{
+			Input:    "{email}@domain.com",
+			Expected: true,
+		},
+		{
+			Input:    "first\"name@domain.com",
+			Expected: false,
+		},
+		{
+			Input:    "first:name@domain.com",
+			Expected: false,
+		},
+		{
+			Input:    "first;name@domain.com",
+			Expected: false,
+		},
+		{
+			Input:    "first,name@domain.com",
+			Expected: false,
+		},
+		{
+			Input:    "first@name@domain.com",
+			Expected: false,
+		},
+		{
+			Input:    "john..doe@example.com",
 			Expected: false,
 		},
 	} {
@@ -988,8 +1036,8 @@ func checkNowhereNil(t *testing.T, name string, value any) bool {
 	case reflect.Ptr:
 		// Ignoring these 2 settings.
 		// TODO: remove them completely in v8.0.
-		if name == "config.BleveSettings.BulkIndexingTimeWindowSeconds" ||
-			name == "config.ElasticsearchSettings.BulkIndexingTimeWindowSeconds" {
+		if name == "config.ElasticsearchSettings.BulkIndexingTimeWindowSeconds" ||
+			name == "config.ClusterSettings.EnableExperimentalGossipEncryption" {
 			return true
 		}
 

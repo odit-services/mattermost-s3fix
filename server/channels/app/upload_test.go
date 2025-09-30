@@ -21,6 +21,7 @@ import (
 )
 
 func TestCreateUploadSession(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t).InitBasic()
 	defer th.TearDown()
 
@@ -67,7 +68,8 @@ func TestCreateUploadSession(t *testing.T) {
 
 	t.Run("deleted channel", func(t *testing.T) {
 		ch := th.CreateChannel(th.Context, th.BasicTeam)
-		th.App.DeleteChannel(th.Context, ch, th.BasicUser.Id)
+		appErr := th.App.DeleteChannel(th.Context, ch, th.BasicUser.Id)
+		require.Nil(t, appErr)
 		us.ChannelId = ch.Id
 		u, err := th.App.CreateUploadSession(th.Context, us)
 		require.NotNil(t, err)
@@ -84,6 +86,7 @@ func TestCreateUploadSession(t *testing.T) {
 }
 
 func TestUploadData(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t).InitBasic()
 	defer th.TearDown()
 
@@ -243,6 +246,7 @@ func TestUploadData(t *testing.T) {
 }
 
 func TestUploadDataConcurrent(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t).InitBasic()
 	defer th.TearDown()
 
@@ -269,7 +273,7 @@ func TestUploadDataConcurrent(t *testing.T) {
 	n := 8
 	wg.Add(n)
 
-	for i := 0; i < n; i++ {
+	for range n {
 		go func() {
 			defer wg.Done()
 			rd := &io.LimitedReader{
@@ -292,7 +296,7 @@ func TestUploadDataConcurrent(t *testing.T) {
 
 	wg.Add(n)
 
-	for i := 0; i < n; i++ {
+	for range n {
 		go func() {
 			defer wg.Done()
 			rd := &io.LimitedReader{

@@ -9,6 +9,7 @@ import type {Post} from '@mattermost/types/posts';
 import type {UserProfile} from '@mattermost/types/users';
 
 import {General} from 'mattermost-redux/constants';
+import {ensureString} from 'mattermost-redux/utils/post_utils';
 
 import FileAttachmentListContainer from 'components/file_attachment_list';
 import PriorityLabel from 'components/post_priority/post_priority_label';
@@ -16,12 +17,8 @@ import PostAttachmentOpenGraph from 'components/post_view/post_attachment_opengr
 import PostMessageView from 'components/post_view/post_message_view';
 import Timestamp from 'components/timestamp';
 import UserProfileComponent from 'components/user_profile';
-import MattermostLogo from 'components/widgets/icons/mattermost_logo';
-import Avatar from 'components/widgets/users/avatar';
 
-import {Constants} from 'utils/constants';
-import * as PostUtils from 'utils/post_utils';
-import * as Utils from 'utils/utils';
+import PreviewPostAvatar from './avatar/avatar';
 
 import PostAttachmentContainer from '../post_attachment_container/post_attachment_container';
 
@@ -52,55 +49,8 @@ const PostMessagePreview = (props: Props) => {
         }
     };
 
-    const getPostIconURL = (defaultURL: string, fromAutoResponder: boolean, fromWebhook: boolean): string => {
-        const {enablePostIconOverride, hasImageProxy, previewPost} = props;
-        const postProps = previewPost?.props;
-        let postIconOverrideURL = '';
-        let useUserIcon = '';
-        if (postProps) {
-            postIconOverrideURL = postProps.override_icon_url;
-            useUserIcon = postProps.use_user_icon;
-        }
-
-        if (!fromAutoResponder && fromWebhook && !useUserIcon && enablePostIconOverride) {
-            if (postIconOverrideURL && postIconOverrideURL !== '') {
-                return PostUtils.getImageSrc(postIconOverrideURL, hasImageProxy);
-            }
-            return Constants.DEFAULT_WEBHOOK_LOGO;
-        }
-
-        return defaultURL;
-    };
-
     if (!previewPost) {
         return null;
-    }
-
-    const isBot = Boolean(user && user.is_bot);
-    const isSystemMessage = PostUtils.isSystemMessage(previewPost);
-    const fromWebhook = PostUtils.isFromWebhook(previewPost);
-    const fromAutoResponder = PostUtils.fromAutoResponder(previewPost);
-    const profileSrc = Utils.imageURLForUser(user?.id ?? '');
-    const src = getPostIconURL(profileSrc, fromAutoResponder, fromWebhook);
-
-    let avatar = (
-        <Avatar
-            size={'sm'}
-            url={src}
-            className={'avatar-post-preview'}
-        />
-    );
-    if (isSystemMessage && !fromWebhook && !isBot) {
-        avatar = (<MattermostLogo className='icon'/>);
-    } else if (user?.id) {
-        avatar = (
-            <Avatar
-                username={user.username}
-                size={'sm'}
-                url={src}
-                className={'avatar-post-preview'}
-            />
-        );
     }
 
     let fileAttachmentPreview = null;
@@ -156,6 +106,8 @@ const PostMessagePreview = (props: Props) => {
         </div>
     ) : null;
 
+    const overwriteName = ensureString(previewPost.props?.override_username);
+
     return (
         <PostAttachmentContainer
             className='permalink'
@@ -167,7 +119,15 @@ const PostMessagePreview = (props: Props) => {
                     <div className='col col__name'>
                         <div className='post__img'>
                             <span className='profile-icon'>
-                                {avatar}
+                                {
+                                    user &&
+                                    <PreviewPostAvatar
+                                        post={previewPost}
+                                        user={user}
+                                        enablePostIconOverride={props.enablePostIconOverride}
+                                        hasImageProxy={props.hasImageProxy}
+                                    />
+                                }
                             </span>
                         </div>
                     </div>
@@ -175,7 +135,7 @@ const PostMessagePreview = (props: Props) => {
                         <UserProfileComponent
                             userId={user?.id ?? ''}
                             disablePopover={true}
-                            overwriteName={previewPost.props?.override_username || ''}
+                            overwriteName={overwriteName}
                         />
                     </div>
                     <div className='col d-flex align-items-center'>

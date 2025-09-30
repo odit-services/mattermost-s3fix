@@ -72,7 +72,7 @@ func (s *MmctlE2ETestSuite) TestLdapSyncCmd() {
 		s.Require().NoError(err)
 
 		s.Require().NotEmpty(printer.GetLines())
-		s.Require().Equal(printer.GetLines()[0], map[string]interface{}{"status": "ok"})
+		s.Require().Equal(printer.GetLines()[0], map[string]any{"status": "ok"})
 		s.Require().Len(printer.GetErrorLines(), 0)
 
 		// we need to wait a bit for job creation
@@ -209,6 +209,15 @@ func (s *MmctlE2ETestSuite) TestLdapJobShowCmdF() {
 
 		err := ldapJobShowCmdF(s.th.Client, &cobra.Command{}, []string{job.Id})
 		s.Require().EqualError(err, "failed to get LDAP sync job: You do not have the appropriate permissions.")
+		s.Require().Empty(printer.GetLines())
+		s.Require().Empty(printer.GetErrorLines())
+	})
+
+	s.RunForSystemAdminAndLocal("no args", func(c client.Client) {
+		printer.Clean()
+
+		err := ldapJobShowCmdF(c, &cobra.Command{}, []string{})
+		s.Require().EqualError(err, "expected at least one argument (ldapJobID). See help text for details")
 		s.Require().Empty(printer.GetLines())
 		s.Require().Empty(printer.GetErrorLines())
 	})

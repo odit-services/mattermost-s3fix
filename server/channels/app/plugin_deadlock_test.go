@@ -16,6 +16,7 @@ import (
 )
 
 func TestPluginDeadlock(t *testing.T) {
+	mainHelper.Parallel(t)
 	t.Run("Single Plugin", func(t *testing.T) {
 		th := Setup(t).InitBasic()
 		defer th.TearDown()
@@ -82,7 +83,8 @@ func TestPluginDeadlock(t *testing.T) {
 		}
 		for _, pluginTemplate := range pluginTemplates {
 			b := &strings.Builder{}
-			pluginTemplate.Execute(b, templateData)
+			err := pluginTemplate.Execute(b, templateData)
+			require.NoError(t, err)
 
 			plugins = append(plugins, b.String())
 		}
@@ -189,7 +191,8 @@ func TestPluginDeadlock(t *testing.T) {
 		}
 		for _, pluginTemplate := range pluginTemplates {
 			b := &strings.Builder{}
-			pluginTemplate.Execute(b, templateData)
+			err := pluginTemplate.Execute(b, templateData)
+			require.NoError(t, err)
 
 			plugins = append(plugins, b.String())
 		}
@@ -272,14 +275,15 @@ func TestPluginDeadlock(t *testing.T) {
 		}
 		for _, pluginTemplate := range pluginTemplates {
 			b := &strings.Builder{}
-			pluginTemplate.Execute(b, templateData)
+			err := pluginTemplate.Execute(b, templateData)
+			require.NoError(t, err)
 
 			plugins = append(plugins, b.String())
 		}
 
 		done := make(chan bool)
 		go func() {
-			posts, appErr := th.App.GetPosts(th.BasicChannel.Id, 0, 2)
+			posts, appErr := th.App.GetPosts(th.Context, th.BasicChannel.Id, 0, 2)
 			require.Nil(t, appErr)
 			require.NotNil(t, posts)
 
@@ -294,7 +298,7 @@ func TestPluginDeadlock(t *testing.T) {
 			SetAppEnvironmentWithPlugins(t, plugins, th.App, th.NewPluginAPI)
 			th.TearDown()
 
-			posts, appErr = th.App.GetPosts(th.BasicChannel.Id, 0, 2)
+			posts, appErr = th.App.GetPosts(th.Context, th.BasicChannel.Id, 0, 2)
 			require.Nil(t, appErr)
 			require.NotNil(t, posts)
 

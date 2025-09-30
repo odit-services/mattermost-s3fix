@@ -7,18 +7,14 @@ import React, {lazy} from 'react';
 import {Route, Switch, Redirect} from 'react-router-dom';
 import type {RouteComponentProps} from 'react-router-dom';
 
-import {ServiceEnvironment} from '@mattermost/types/config';
-
 import {setSystemEmojis} from 'mattermost-redux/actions/emojis';
 import {setUrl} from 'mattermost-redux/actions/general';
 import {Client4} from 'mattermost-redux/client';
-import {rudderAnalytics, RudderTelemetryHandler} from 'mattermost-redux/client/rudder';
 
-import {measurePageLoadTelemetry, temporarilySetPageLoadContext, trackEvent, trackSelectorMetrics} from 'actions/telemetry_actions.jsx';
+import {temporarilySetPageLoadContext} from 'actions/telemetry_actions.jsx';
 import BrowserStore from 'stores/browser_store';
 
-import {makeAsyncComponent} from 'components/async_load';
-import OpenPluginInstallPost from 'components/custom_open_plugin_install_post_renderer';
+import {makeAsyncComponent, makeAsyncPluggableComponent} from 'components/async_load';
 import GlobalHeader from 'components/global_header/global_header';
 import {HFRoute} from 'components/header_footer_route/header_footer_route';
 import {HFTRoute, LoggedInHFTRoute} from 'components/header_footer_template_route';
@@ -27,12 +23,13 @@ import LoggedIn from 'components/logged_in';
 import LoggedInRoute from 'components/logged_in_route';
 import {LAUNCHING_WORKSPACE_FULLSCREEN_Z_INDEX} from 'components/preparing_workspace/launching_workspace';
 import {Animations} from 'components/preparing_workspace/steps';
-import SidebarMobileRightMenu from 'components/sidebar_mobile_right_menu';
+import Readout from 'components/readout/readout';
 
 import webSocketClient from 'client/web_websocket_client';
 import {initializePlugins} from 'plugins';
-import A11yController from 'utils/a11y_controller';
-import {PageLoadContext} from 'utils/constants';
+import 'utils/a11y_controller_instance';
+import {PageLoadContext, SCHEDULED_POST_URL_SUFFIX} from 'utils/constants';
+import DesktopApp from 'utils/desktop_api';
 import {EmojiIndicesByAlias} from 'utils/emoji';
 import {TEAM_NAME_PATH_PATTERN} from 'utils/path';
 import {getSiteURL} from 'utils/url';
@@ -46,7 +43,7 @@ import RootRedirect from './root_redirect';
 
 import type {PropsFromRedux} from './index';
 
-import 'plugins/export.js';
+import 'plugins/export';
 
 const MobileViewWatcher = makeAsyncComponent('MobileViewWatcher', lazy(() => import('components/mobile_view_watcher')));
 const WindowSizeObserver = makeAsyncComponent('WindowSizeObserver', lazy(() => import('components/window_size_observer/WindowSizeObserver')));
@@ -67,9 +64,7 @@ const Authorize = makeAsyncComponent('Authorize', lazy(() => import('components/
 const CreateTeam = makeAsyncComponent('CreateTeam', lazy(() => import('components/create_team')));
 const Mfa = makeAsyncComponent('Mfa', lazy(() => import('components/mfa/mfa_controller')));
 const PreparingWorkspace = makeAsyncComponent('PreparingWorkspace', lazy(() => import('components/preparing_workspace')));
-const Pluggable = makeAsyncComponent('Pluggable', lazy(() => import('plugins/pluggable')));
 const LaunchingWorkspace = makeAsyncComponent('LaunchingWorkspace', lazy(() => import('components/preparing_workspace/launching_workspace')));
-const CompassThemeProvider = makeAsyncComponent('CompassThemeProvider', lazy(() => import('components/compass_theme_provider/compass_theme_provider')));
 const TeamController = makeAsyncComponent('TeamController', lazy(() => import('components/team_controller')));
 const AnnouncementBarController = makeAsyncComponent('AnnouncementBarController', lazy(() => import('components/announcement_bar')));
 const SystemNotice = makeAsyncComponent('SystemNotice', lazy(() => import('components/system_notice')));
@@ -78,10 +73,11 @@ const TeamSidebar = makeAsyncComponent('TeamSidebar', lazy(() => import('compone
 const SidebarRight = makeAsyncComponent('SidebarRight', lazy(() => import('components/sidebar_right')));
 const ModalController = makeAsyncComponent('ModalController', lazy(() => import('components/modal_controller')));
 const AppBar = makeAsyncComponent('AppBar', lazy(() => import('components/app_bar/app_bar')));
+const ComponentLibrary = makeAsyncComponent('ComponentLibrary', lazy(() => import('components/component_library')));
 
-const noop = () => {};
+const Pluggable = makeAsyncPluggableComponent();
 
-export type Props = PropsFromRedux & RouteComponentProps;
+export type Props = PropsFromRedux & RouteComponentProps
 
 interface State {
     shouldMountAppRoutes?: boolean;
@@ -90,8 +86,6 @@ interface State {
 export default class Root extends React.PureComponent<Props, State> {
     // The constructor adds a bunch of event listeners,
     // so we do need this.
-    private a11yController: A11yController;
-
     constructor(props: Props) {
         super(props);
 
@@ -105,76 +99,7 @@ export default class Root extends React.PureComponent<Props, State> {
         this.state = {
             shouldMountAppRoutes: false,
         };
-
-        this.a11yController = new A11yController();
     }
-
-    setRudderConfig = () => {
-        const telemetryId = this.props.telemetryId;
-
-        const rudderUrl = 'https://pdat.matterlytics.com';
-        let rudderKey = '';
-        switch (this.props.serviceEnvironment) {
-        case ServiceEnvironment.PRODUCTION:
-            rudderKey = '1aoejPqhgONMI720CsBSRWzzRQ9';
-            break;
-        case ServiceEnvironment.TEST:
-            rudderKey = '1aoeoCDeh7OCHcbW2kseWlwUFyq';
-            break;
-        case ServiceEnvironment.DEV:
-            break;
-        }
-
-        if (rudderKey !== '' && this.props.telemetryEnabled) {
-            const rudderCfg: {setCookieDomain?: string} = {};
-            if (this.props.siteURL !== '') {
-                try {
-                    rudderCfg.setCookieDomain = new URL(this.props.siteURL || '').hostname;
-                } catch (_) {
-                    // eslint-disable-next-line no-console
-                    console.error('Failed to set cookie domain for RudderStack');
-                }
-            }
-
-            rudderAnalytics.load(rudderKey, rudderUrl || '', rudderCfg);
-
-            rudderAnalytics.identify(telemetryId, {}, {
-                context: {
-                    ip: '0.0.0.0',
-                },
-                page: {
-                    path: '',
-                    referrer: '',
-                    search: '',
-                    title: '',
-                    url: '',
-                },
-                anonymousId: '00000000000000000000000000',
-            });
-
-            rudderAnalytics.page('ApplicationLoaded', {
-                path: '',
-                referrer: '',
-                search: ('' as any),
-                title: '',
-                url: '',
-            } as any,
-            {
-                context: {
-                    ip: '0.0.0.0',
-                },
-                anonymousId: '00000000000000000000000000',
-            });
-
-            const utmParams = this.captureUTMParams();
-            rudderAnalytics.ready(() => {
-                Client4.setTelemetryHandler(new RudderTelemetryHandler());
-                if (utmParams) {
-                    trackEvent('utm_params', 'utm_params', utmParams);
-                }
-            });
-        }
-    };
 
     onConfigLoaded = () => {
         Promise.all([
@@ -186,13 +111,17 @@ export default class Root extends React.PureComponent<Props, State> {
 
         this.props.actions.migrateRecentEmojis();
         this.props.actions.loadRecentlyUsedCustomEmojis();
-
         this.showLandingPageIfNecessary();
 
-        applyTheme(this.props.theme);
+        this.applyTheme();
     };
 
     private showLandingPageIfNecessary = () => {
+        // Only show Landing Page if enabled
+        if (!this.props.enableDesktopLandingPage) {
+            return;
+        }
+
         // We have nothing to redirect to if we're already on Desktop App
         // Chromebook has no Desktop App to switch to
         if (isDesktopApp() || isChromebook()) {
@@ -248,9 +177,19 @@ export default class Root extends React.PureComponent<Props, State> {
         BrowserStore.setLandingPageSeen(true);
     };
 
+    applyTheme() {
+        // don't apply theme when in system console; system console hardcoded to THEMES.denim
+        // AdminConsole will apply denim on mount re-apply user theme on unmount
+        if (this.props.location.pathname.startsWith('/admin_console')) {
+            return;
+        }
+
+        applyTheme(this.props.theme);
+    }
+
     componentDidUpdate(prevProps: Props, prevState: State) {
         if (!deepEqual(prevProps.theme, this.props.theme)) {
-            applyTheme(this.props.theme);
+            this.applyTheme();
         }
 
         if (this.props.location.pathname === '/') {
@@ -269,13 +208,10 @@ export default class Root extends React.PureComponent<Props, State> {
             this.setRootMeta();
         }
 
-        if (!prevProps.isConfigLoaded && this.props.isConfigLoaded) {
-            this.setRudderConfig();
-        }
-
         if (prevState.shouldMountAppRoutes === false && this.state.shouldMountAppRoutes === true) {
             if (!doesRouteBelongToTeamControllerRoutes(this.props.location.pathname)) {
-                InitialLoadingScreen.stop();
+                DesktopApp.reactAppInitialized();
+                InitialLoadingScreen.stop('root');
             }
         }
     }
@@ -312,7 +248,7 @@ export default class Root extends React.PureComponent<Props, State> {
 
             if (isUserAtRootRoute) {
                 if (isMeRequested) {
-                    this.props.actions.redirectToOnboardingOrDefaultTeam(this.props.history);
+                    this.props.actions.redirectToOnboardingOrDefaultTeam(this.props.history, new URLSearchParams(this.props.location.search));
                 } else if (this.props.noAccounts) {
                     this.props.history.push('/signup_user_complete');
                 }
@@ -340,12 +276,6 @@ export default class Root extends React.PureComponent<Props, State> {
         temporarilySetPageLoadContext(PageLoadContext.PAGE_LOAD);
 
         this.initiateMeRequests();
-
-        // See figma design on issue https://mattermost.atlassian.net/browse/MM-43649
-        this.props.actions.registerCustomPostRenderer('custom_pl_notification', OpenPluginInstallPost, 'plugin_install_post_message_renderer');
-
-        measurePageLoadTelemetry();
-        trackSelectorMetrics();
 
         // Force logout of all tabs if one tab is logged out
         window.addEventListener('storage', this.handleLogoutLoginSignal);
@@ -433,12 +363,17 @@ export default class Root extends React.PureComponent<Props, State> {
                         path={'/landing'}
                         component={LinkingLandingPage}
                     />
+                    {this.props.isDevModeEnabled && (
+                        <Route
+                            path={'/component_library'}
+                            component={ComponentLibrary}
+                        />
+                    )}
                     <Route
                         path={'/admin_console'}
                     >
                         <Switch>
                             <LoggedInRoute
-                                theme={this.props.theme}
                                 path={'/admin_console'}
                                 component={AdminConsole}
                             />
@@ -473,16 +408,16 @@ export default class Root extends React.PureComponent<Props, State> {
                         from={'/_redirect/pl/:postid'}
                         to={`/${this.props.permalinkRedirectTeamName}/pl/:postid`}
                     />
-                    <CompassThemeProvider theme={this.props.theme}>
+                    <>
                         {(this.props.showLaunchingWorkspace && !this.props.location.pathname.includes('/preparing-workspace') &&
                             <LaunchingWorkspace
                                 fullscreen={true}
                                 zIndex={LAUNCHING_WORKSPACE_FULLSCREEN_Z_INDEX}
                                 show={true}
-                                onPageView={noop}
                                 transitionDirection={Animations.Reasons.EnterFromBefore}
                             />
                         )}
+
                         <WindowSizeObserver/>
                         <ModalController/>
                         <AnnouncementBarController/>
@@ -541,7 +476,7 @@ export default class Root extends React.PureComponent<Props, State> {
                                 {this.props.plugins?.map((plugin) => (
                                     <Route
                                         key={plugin.id}
-                                        path={'/plug/' + (plugin as any).route}
+                                        path={'/plug/' + plugin.route}
                                         render={() => (
                                             <Pluggable
                                                 pluggableName={'CustomRouteComponent'}
@@ -552,7 +487,6 @@ export default class Root extends React.PureComponent<Props, State> {
                                     />
                                 ))}
                                 <LoggedInRoute
-                                    theme={this.props.theme}
                                     path={`/:team(${TEAM_NAME_PATH_PATTERN})`}
                                     component={TeamController}
                                 />
@@ -562,8 +496,8 @@ export default class Root extends React.PureComponent<Props, State> {
                         </div>
                         <Pluggable pluggableName='Global'/>
                         <AppBar/>
-                        <SidebarMobileRightMenu/>
-                    </CompassThemeProvider>
+                        <Readout/>
+                    </>
                 </Switch>
             </RootProvider>
         );
@@ -573,7 +507,7 @@ export default class Root extends React.PureComponent<Props, State> {
 export function doesRouteBelongToTeamControllerRoutes(pathname: RouteComponentProps['location']['pathname']): boolean {
     // Note: we have specifically added admin_console to the negative lookahead as admin_console can have integrations as subpaths (admin_console/integrations/bot_accounts)
     // and we don't want to treat those as team controller routes.
-    const TEAM_CONTROLLER_PATH_PATTERN = /^\/(?!admin_console)([a-z0-9\-_]+)\/(channels|messages|threads|drafts|integrations|emoji)(\/.*)?$/;
+    const TEAM_CONTROLLER_PATH_PATTERN = new RegExp(`^/(?!admin_console)([a-z0-9\\-_]+)/(channels|messages|threads|drafts|integrations|emoji|${SCHEDULED_POST_URL_SUFFIX})(/.*)?$`);
 
     return TEAM_CONTROLLER_PATH_PATTERN.test(pathname);
 }

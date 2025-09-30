@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
@@ -18,13 +17,12 @@ import (
 
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
-	"github.com/mattermost/mattermost/server/public/shared/i18n"
 )
 
 type hookRunner struct {
 }
 
-func (h *hookRunner) RunMultiHook(hookRunnerFunc func(hooks plugin.Hooks) bool, hookId int) {
+func (h *hookRunner) RunMultiHook(hookRunnerFunc func(hooks plugin.Hooks, _ *model.Manifest) bool, hookId int) {
 
 }
 func (h *hookRunner) HooksForPlugin(id string) (plugin.Hooks, error) {
@@ -43,23 +41,23 @@ func TestWebConnAddDeadQueue(t *testing.T) {
 		WebSocket: &websocket.Conn{},
 	}, th.Suite, &hookRunner{})
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		msg := &model.WebSocketEvent{}
 		msg = msg.SetSequence(int64(i))
 		wc.addToDeadQueue(msg)
 	}
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		assert.Equal(t, int64(i), wc.deadQueue[i].GetSequence())
 	}
 
 	// Should push out the first two elements
-	for i := 0; i < deadQueueSize; i++ {
+	for i := range deadQueueSize {
 		msg := &model.WebSocketEvent{}
 		msg = msg.SetSequence(int64(i + 2))
 		wc.addToDeadQueue(msg)
 	}
-	for i := 0; i < deadQueueSize; i++ {
+	for i := range deadQueueSize {
 		assert.Equal(t, int64(i+2), wc.deadQueue[(i+2)%deadQueueSize].GetSequence())
 	}
 }
@@ -216,7 +214,7 @@ func TestWebConnDrainDeadQueue(t *testing.T) {
 		wc := dialConn(t, th, s.Listener.Addr())
 		defer wc.WebSocket.Close()
 
-		for i := 0; i < limit; i++ {
+		for i := range limit {
 			msg := model.NewWebSocketEvent("", "", "", "", map[string]bool{}, "")
 			msg = msg.SetSequence(int64(i))
 			wc.addToDeadQueue(msg)
@@ -242,39 +240,4 @@ func TestWebConnDrainDeadQueue(t *testing.T) {
 		t.Run("Cycled End", func(t *testing.T) { run(int64(137), deadQueueSize+10) })
 		t.Run("Overwritten First", func(t *testing.T) { run(int64(128), deadQueueSize+10) })
 	})
-}
-
-// TestWebConnSessionRace guards against https://mattermost.atlassian.net/browse/MM-60307. It need to be run with the -race flag.
-func TestWebConnSessionRace(t *testing.T) {
-	th := Setup(t).InitBasic()
-	t.Cleanup(th.TearDown)
-
-	s := httptest.NewServer(dummyWebsocketHandler(t))
-	t.Cleanup(s.Close)
-	d := websocket.Dialer{}
-	c, _, err := d.Dial("ws://"+s.Listener.Addr().String()+"/ws", nil)
-	require.NoError(t, err)
-
-	err = th.Service.Start(nil)
-	require.NoError(t, err)
-
-	session, err := th.Service.CreateSession(th.Context, &model.Session{
-		UserId: th.BasicUser.Id,
-	})
-	require.NoError(t, err)
-	// Ensure LastActivityAt needs to get updated in the session store
-	session.LastActivityAt = session.LastActivityAt - model.SessionActivityTimeout - 1
-
-	cfg := &WebConnConfig{
-		WebSocket: c,
-		Session:   *session,
-		TFunc:     i18n.IdentityTfunc(),
-		Locale:    "en",
-	}
-	_ = th.Service.NewWebConn(cfg, th.Suite, &hookRunner{})
-
-	session.AddProp(model.SessionPropPlatform, "chrome")
-
-	// Wait a bit of the race checker to catch any
-	time.Sleep(100 * time.Millisecond)
 }

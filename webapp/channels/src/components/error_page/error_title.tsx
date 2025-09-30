@@ -5,7 +5,6 @@ import React from 'react';
 import {FormattedMessage} from 'react-intl';
 
 import {ErrorPageTypes} from 'utils/constants';
-import * as Utils from 'utils/utils';
 
 type Props = {
     type?: string | null;
@@ -29,6 +28,14 @@ const ErrorTitle: React.FC<Props> = ({type, title}: Props) => {
                 <FormattedMessage
                     id='permalink.error.title'
                     defaultMessage='Message Not Found'
+                />
+            );
+            break;
+        case ErrorPageTypes.POST_NOT_FOUND:
+            errorTitle = (
+                <FormattedMessage
+                    id='post.error.title'
+                    defaultMessage='Post Not Found'
                 />
             );
             break;
@@ -93,7 +100,12 @@ const ErrorTitle: React.FC<Props> = ({type, title}: Props) => {
     } else if (title) {
         errorTitle = <>{title}</>;
     } else {
-        errorTitle = <>{Utils.localizeMessage({id: 'error.generic.title', defaultMessage: 'Error'})}</>;
+        errorTitle = (
+            <FormattedMessage
+                id='error.generic.title'
+                defaultMessage='Error'
+            />
+        );
     }
 
     return errorTitle;

@@ -18,6 +18,7 @@ import (
 )
 
 func TestConfigListener(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 
@@ -53,6 +54,7 @@ func TestConfigListener(t *testing.T) {
 }
 
 func TestConfigSave(t *testing.T) {
+	mainHelper.Parallel(t)
 	cm := &mocks.ClusterInterface{}
 	cm.On("SendClusterMessage", mock.AnythingOfType("*model.ClusterMessage")).Return(nil)
 	th := SetupWithCluster(t, cm)
@@ -88,21 +90,25 @@ func TestConfigSave(t *testing.T) {
 		// Change a random config setting
 		cfg := th.Service.Config().Clone()
 		cfg.ThemeSettings.EnableThemeSelection = model.NewPointer(!*cfg.ThemeSettings.EnableThemeSelection)
-		th.Service.SaveConfig(cfg, false)
+		_, _, appErr := th.Service.SaveConfig(cfg, false)
+		require.Nil(t, appErr)
 		metricsMock.AssertNumberOfCalls(t, "Register", 0)
 
 		// Disable metrics
 		cfg.MetricsSettings.Enable = model.NewPointer(false)
-		th.Service.SaveConfig(cfg, false)
+		_, _, appErr = th.Service.SaveConfig(cfg, false)
+		require.Nil(t, appErr)
 
 		// Change the metrics setting
 		cfg.MetricsSettings.Enable = model.NewPointer(true)
-		th.Service.SaveConfig(cfg, false)
+		_, _, appErr = th.Service.SaveConfig(cfg, false)
+		require.Nil(t, appErr)
 		metricsMock.AssertNumberOfCalls(t, "Register", 1)
 	})
 }
 
 func TestIsFirstUserAccount(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := SetupWithStoreMock(t)
 	defer th.TearDown()
 	storeMock := th.Service.Store.(*smocks.Store)
@@ -126,7 +132,8 @@ func TestIsFirstUserAccount(t *testing.T) {
 	}
 
 	// create a session, this should not affect IsFirstUserAccount
-	th.Service.sessionCache.SetWithDefaultExpiry("mock_session", 1)
+	err := th.Service.sessionCache.SetWithDefaultExpiry("mock_session", 1)
+	require.NoError(t, err)
 
 	for _, te := range tests {
 		t.Run(te.name, func(t *testing.T) {
@@ -144,6 +151,7 @@ func TestIsFirstUserAccount(t *testing.T) {
 }
 
 func TestIsFirstUserAccountThunderingHerd(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := SetupWithStoreMock(t)
 	defer th.TearDown()
 	storeMock := th.Service.Store.(*smocks.Store)

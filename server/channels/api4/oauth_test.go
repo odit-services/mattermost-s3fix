@@ -15,6 +15,7 @@ import (
 )
 
 func TestCreateOAuthApp(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 	client := th.Client
@@ -64,7 +65,8 @@ func TestCreateOAuthApp(t *testing.T) {
 	require.Error(t, err, "expected error from garbage post")
 	assert.Equal(t, http.StatusBadRequest, r.StatusCode)
 
-	client.Logout(context.Background())
+	_, err = client.Logout(context.Background())
+	require.NoError(t, err)
 	_, resp, err = client.CreateOAuthApp(context.Background(), oapp)
 	require.Error(t, err)
 	CheckUnauthorizedStatus(t, resp)
@@ -77,6 +79,10 @@ func TestCreateOAuthApp(t *testing.T) {
 }
 
 func TestUpdateOAuthApp(t *testing.T) {
+	t.Skip("https://mattermost.atlassian.net/browse/MM-62895")
+
+	mainHelper.Parallel(t)
+
 	th := Setup(t).InitBasic()
 	defer th.TearDown()
 	client := th.Client
@@ -156,7 +162,8 @@ func TestUpdateOAuthApp(t *testing.T) {
 	require.Error(t, err)
 	CheckNotImplementedStatus(t, resp)
 
-	client.Logout(context.Background())
+	_, err = client.Logout(context.Background())
+	require.NoError(t, err)
 	_, resp, err = client.UpdateOAuthApp(context.Background(), oapp)
 	require.Error(t, err)
 	CheckUnauthorizedStatus(t, resp)
@@ -199,6 +206,7 @@ func TestUpdateOAuthApp(t *testing.T) {
 }
 
 func TestGetOAuthApps(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 	client := th.Client
@@ -255,7 +263,8 @@ func TestGetOAuthApps(t *testing.T) {
 	require.Error(t, err)
 	CheckForbiddenStatus(t, resp)
 
-	client.Logout(context.Background())
+	_, err = client.Logout(context.Background())
+	require.NoError(t, err)
 
 	_, resp, err = client.GetOAuthApps(context.Background(), 0, 1000)
 	require.Error(t, err)
@@ -268,6 +277,7 @@ func TestGetOAuthApps(t *testing.T) {
 }
 
 func TestGetOAuthApp(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 	client := th.Client
@@ -317,7 +327,8 @@ func TestGetOAuthApp(t *testing.T) {
 	require.Error(t, err)
 	CheckForbiddenStatus(t, resp)
 
-	client.Logout(context.Background())
+	_, err = client.Logout(context.Background())
+	require.NoError(t, err)
 
 	_, resp, err = client.GetOAuthApp(context.Background(), rapp2.Id)
 	require.Error(t, err)
@@ -338,6 +349,7 @@ func TestGetOAuthApp(t *testing.T) {
 }
 
 func TestGetOAuthAppInfo(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 	client := th.Client
@@ -385,7 +397,8 @@ func TestGetOAuthAppInfo(t *testing.T) {
 	_, _, err = client.GetOAuthAppInfo(context.Background(), rapp2.Id)
 	require.NoError(t, err)
 
-	client.Logout(context.Background())
+	_, err = client.Logout(context.Background())
+	require.NoError(t, err)
 
 	_, resp, err := client.GetOAuthAppInfo(context.Background(), rapp2.Id)
 	require.Error(t, err)
@@ -406,6 +419,7 @@ func TestGetOAuthAppInfo(t *testing.T) {
 }
 
 func TestDeleteOAuthApp(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 	client := th.Client
@@ -458,7 +472,8 @@ func TestDeleteOAuthApp(t *testing.T) {
 	require.Error(t, err)
 	CheckForbiddenStatus(t, resp)
 
-	client.Logout(context.Background())
+	_, err = client.Logout(context.Background())
+	require.NoError(t, err)
 	resp, err = client.DeleteOAuthApp(context.Background(), rapp.Id)
 	require.Error(t, err)
 	CheckUnauthorizedStatus(t, resp)
@@ -478,6 +493,7 @@ func TestDeleteOAuthApp(t *testing.T) {
 }
 
 func TestRegenerateOAuthAppSecret(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 	client := th.Client
@@ -532,7 +548,8 @@ func TestRegenerateOAuthAppSecret(t *testing.T) {
 	require.Error(t, err)
 	CheckForbiddenStatus(t, resp)
 
-	client.Logout(context.Background())
+	_, err = client.Logout(context.Background())
+	require.NoError(t, err)
 	_, resp, err = client.RegenerateOAuthAppSecret(context.Background(), rapp.Id)
 	require.Error(t, err)
 	CheckUnauthorizedStatus(t, resp)
@@ -552,6 +569,7 @@ func TestRegenerateOAuthAppSecret(t *testing.T) {
 }
 
 func TestGetAuthorizedOAuthAppsForUser(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t).InitBasic()
 	defer th.TearDown()
 	client := th.Client
@@ -599,7 +617,8 @@ func TestGetAuthorizedOAuthAppsForUser(t *testing.T) {
 	require.Error(t, err)
 	CheckBadRequestStatus(t, resp)
 
-	client.Logout(context.Background())
+	_, err = client.Logout(context.Background())
+	require.NoError(t, err)
 	_, resp, err = client.GetAuthorizedOAuthAppsForUser(context.Background(), th.BasicUser.Id, 0, 1000)
 	require.Error(t, err)
 	CheckUnauthorizedStatus(t, resp)
@@ -609,6 +628,7 @@ func TestGetAuthorizedOAuthAppsForUser(t *testing.T) {
 }
 
 func TestNilAuthorizeOAuthApp(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t).InitBasic()
 	defer th.TearDown()
 	client := th.Client

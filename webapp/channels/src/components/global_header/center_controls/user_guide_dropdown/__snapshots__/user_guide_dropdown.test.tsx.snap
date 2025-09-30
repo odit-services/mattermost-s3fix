@@ -8,8 +8,6 @@ exports[`components/channel_header/components/UserGuideDropdown should match sna
   onToggle={[Function]}
 >
   <WithTooltip
-    id="userGuideHelpTooltip"
-    placement="bottom"
     title={
       <Memo(MemoizedFormattedMessage)
         defaultMessage="Help"
@@ -17,16 +15,13 @@ exports[`components/channel_header/components/UserGuideDropdown should match sna
       />
     }
   >
-    <ForwardRef
+    <HeaderIconButton
       active={false}
       aria-controls="AddChannelDropdown"
       aria-expanded={false}
       aria-label="Help"
-      compact={true}
       icon="help-circle-outline"
-      inverted={true}
       onClick={[Function]}
-      size="sm"
     />
   </WithTooltip>
   <Menu
@@ -53,7 +48,6 @@ exports[`components/channel_header/components/UserGuideDropdown should match sna
       <MenuItemExternalLink
         iconClassName="icon-help"
         id="askTheCommunityLink"
-        onClick={[Function]}
         show={true}
         text="Ask the community"
         url="https://mattermost.com/pl/default-ask-mattermost-community/"
@@ -85,8 +79,6 @@ exports[`components/channel_header/components/UserGuideDropdown should match sna
   onToggle={[Function]}
 >
   <WithTooltip
-    id="userGuideHelpTooltip"
-    placement="bottom"
     title={
       <Memo(MemoizedFormattedMessage)
         defaultMessage="Help"
@@ -94,16 +86,13 @@ exports[`components/channel_header/components/UserGuideDropdown should match sna
       />
     }
   >
-    <ForwardRef
+    <HeaderIconButton
       active={false}
       aria-controls="AddChannelDropdown"
       aria-expanded={false}
       aria-label="Help"
-      compact={true}
       icon="help-circle-outline"
-      inverted={true}
       onClick={[Function]}
-      size="sm"
     />
   </WithTooltip>
   <Menu
@@ -154,8 +143,6 @@ exports[`components/channel_header/components/UserGuideDropdown should match sna
   onToggle={[Function]}
 >
   <WithTooltip
-    id="userGuideHelpTooltip"
-    placement="bottom"
     title={
       <Memo(MemoizedFormattedMessage)
         defaultMessage="Help"
@@ -163,16 +150,13 @@ exports[`components/channel_header/components/UserGuideDropdown should match sna
       />
     }
   >
-    <ForwardRef
+    <HeaderIconButton
       active={false}
       aria-controls="AddChannelDropdown"
       aria-expanded={false}
       aria-label="Help"
-      compact={true}
       icon="help-circle-outline"
-      inverted={true}
       onClick={[Function]}
-      size="sm"
     />
   </WithTooltip>
   <Menu
@@ -199,7 +183,6 @@ exports[`components/channel_header/components/UserGuideDropdown should match sna
       <MenuItemExternalLink
         iconClassName="icon-help"
         id="askTheCommunityLink"
-        onClick={[Function]}
         show={true}
         text="Ask the community"
         url="https://mattermost.com/pl/default-ask-mattermost-community/"

@@ -39,13 +39,13 @@ import type {GlobalState} from 'types/store';
 import {removePostCloseRHSDeleteDraft} from './actions';
 import PostComponent from './post_component';
 
-interface OwnProps {
+type OwnProps = {
     post?: Post | UserActivityPost;
     previousPostId?: string;
     postId?: string;
     shouldHighlight?: boolean;
     location: keyof typeof Locations;
-}
+};
 
 function isFirstReply(post: Post, previousPost?: Post | null): boolean {
     if (post.root_id) {
@@ -176,6 +176,7 @@ function makeMapStateToProps() {
             canReply,
             pluginPostTypes: state.plugins.postTypes,
             channelIsArchived: isArchivedChannel(channel),
+            channelIsShared: channel?.shared,
             isConsecutivePost: isConsecutivePost(state, ownProps),
             previousPostIsComment,
             isFlagged: isPostFlagged(state, post.id),

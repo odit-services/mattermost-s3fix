@@ -60,7 +60,8 @@ func TestGetPing(t *testing.T) {
 	}, "with server status")
 
 	th.TestForAllClients(t, func(t *testing.T, client *model.Client4) {
-		th.App.ReloadConfig()
+		err := th.App.ReloadConfig()
+		require.NoError(t, err)
 		respMap, resp, err := client.GetPingWithOptions(context.Background(), model.SystemPingOptions{})
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -70,7 +71,8 @@ func TestGetPing(t *testing.T) {
 		// Run the environment variable override code to test
 		os.Setenv("MM_FEATUREFLAGS_TESTFEATURE", "testvalueunique")
 		defer os.Unsetenv("MM_FEATUREFLAGS_TESTFEATURE")
-		th.App.ReloadConfig()
+		err = th.App.ReloadConfig()
+		require.NoError(t, err)
 
 		respMap, resp, err = client.GetPingWithOptions(context.Background(), model.SystemPingOptions{})
 		require.NoError(t, err)
@@ -96,7 +98,8 @@ func TestGetPing(t *testing.T) {
 	})
 
 	th.TestForAllClients(t, func(t *testing.T, client *model.Client4) {
-		th.App.ReloadConfig()
+		err := th.App.ReloadConfig()
+		require.NoError(t, err)
 		resp, err := client.DoAPIGet(context.Background(), "/system/ping?device_id=platform:id", "")
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -108,6 +111,7 @@ func TestGetPing(t *testing.T) {
 }
 
 func TestGetAudits(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 	client := th.Client
@@ -131,13 +135,16 @@ func TestGetAudits(t *testing.T) {
 	require.Error(t, err)
 	CheckForbiddenStatus(t, resp)
 
-	client.Logout(context.Background())
+	_, err = client.Logout(context.Background())
+	require.NoError(t, err)
+
 	_, resp, err = client.GetAudits(context.Background(), 0, 100, "")
 	require.Error(t, err)
 	CheckUnauthorizedStatus(t, resp)
 }
 
 func TestEmailTest(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 	client := th.Client
@@ -219,6 +226,7 @@ func TestEmailTest(t *testing.T) {
 }
 
 func TestGenerateSupportPacket(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	th.LoginSystemManager()
 	defer th.TearDown()
@@ -228,9 +236,17 @@ func TestGenerateSupportPacket(t *testing.T) {
 		th.App.Srv().SetLicense(l)
 
 		th.TestForSystemAdminAndLocal(t, func(t *testing.T, c *model.Client4) {
-			file, _, err := th.SystemAdminClient.GenerateSupportPacket(context.Background())
+			file, filename, resp, err := th.SystemAdminClient.GenerateSupportPacket(context.Background())
 			require.NoError(t, err)
-			require.NotZero(t, len(file))
+
+			assert.Contains(t, filename, "mm_support_packet_My_awesome_Company_")
+
+			d, err := io.ReadAll(file)
+			require.NoError(t, err)
+			assert.NotZero(t, len(d))
+
+			// Verify that the Cache-Control header is set to prevent caching
+			assert.Equal(t, "no-cache, no-store, must-revalidate", resp.Header.Get("Cache-Control"))
 		})
 	})
 
@@ -244,20 +260,20 @@ func TestGenerateSupportPacket(t *testing.T) {
 		}()
 
 		th.TestForSystemAdminAndLocal(t, func(t *testing.T, c *model.Client4) {
-			_, resp, err := th.SystemAdminClient.GenerateSupportPacket(context.Background())
+			_, _, resp, err := th.SystemAdminClient.GenerateSupportPacket(context.Background())
 			require.Error(t, err)
 			CheckForbiddenStatus(t, resp)
 		})
 	})
 
 	t.Run("As a system role, not system admin", func(t *testing.T) {
-		_, resp, err := th.SystemManagerClient.GenerateSupportPacket(context.Background())
+		_, _, resp, err := th.SystemManagerClient.GenerateSupportPacket(context.Background())
 		require.Error(t, err)
 		CheckForbiddenStatus(t, resp)
 	})
 
 	t.Run("As a Regular User", func(t *testing.T) {
-		_, resp, err := th.Client.GenerateSupportPacket(context.Background())
+		_, _, resp, err := th.Client.GenerateSupportPacket(context.Background())
 		require.Error(t, err)
 		CheckForbiddenStatus(t, resp)
 	})
@@ -266,13 +282,46 @@ func TestGenerateSupportPacket(t *testing.T) {
 		_, err := th.SystemAdminClient.RemoveLicenseFile(context.Background())
 		require.NoError(t, err)
 
-		_, resp, err := th.SystemAdminClient.GenerateSupportPacket(context.Background())
+		_, _, resp, err := th.SystemAdminClient.GenerateSupportPacket(context.Background())
 		require.Error(t, err)
 		CheckForbiddenStatus(t, resp)
 	})
 }
 
+func TestSupportPacketFileName(t *testing.T) {
+	mainHelper.Parallel(t)
+	tests := map[string]struct {
+		now          time.Time
+		customerName string
+		expected     string
+	}{
+		"standard case": {
+			now:          time.Date(2023, 11, 12, 13, 14, 15, 0, time.UTC),
+			customerName: "TestCustomer",
+			expected:     "mm_support_packet_TestCustomer_2023-11-12T13-14.zip",
+		},
+		"customer name with special characters": {
+			now:          time.Date(2023, 11, 12, 13, 14, 15, 0, time.UTC),
+			customerName: "Test/Customer:Name",
+			expected:     "mm_support_packet_Test_Customer_Name_2023-11-12T13-14.zip",
+		},
+		"empty customer name": {
+			now:          time.Date(2023, 10, 10, 10, 10, 10, 0, time.UTC),
+			customerName: "",
+			expected:     "mm_support_packet__2023-10-10T10-10.zip",
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			result := supportPacketFileName(tt.now, tt.customerName)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
 func TestSiteURLTest(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 	client := th.Client
@@ -319,6 +368,7 @@ func TestSiteURLTest(t *testing.T) {
 }
 
 func TestDatabaseRecycle(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 	client := th.Client
@@ -344,6 +394,7 @@ func TestDatabaseRecycle(t *testing.T) {
 }
 
 func TestInvalidateCaches(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 	client := th.Client
@@ -369,10 +420,11 @@ func TestInvalidateCaches(t *testing.T) {
 }
 
 func TestGetLogs(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		th.TestLogger.Info(strconv.Itoa(i))
 	}
 
@@ -408,17 +460,20 @@ func TestGetLogs(t *testing.T) {
 	require.Error(t, err)
 	CheckForbiddenStatus(t, resp)
 
-	th.Client.Logout(context.Background())
+	_, err = th.Client.Logout(context.Background())
+	require.NoError(t, err)
+
 	_, resp, err = th.Client.GetLogs(context.Background(), 0, 10)
 	require.Error(t, err)
 	CheckUnauthorizedStatus(t, resp)
 }
 
 func TestDownloadLogs(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		th.TestLogger.Info(strconv.Itoa(i))
 	}
 	err := th.TestLogger.Flush()
@@ -432,7 +487,7 @@ func TestDownloadLogs(t *testing.T) {
 		require.Contains(t, resp.Header.Get("Content-Disposition"), "attachment;filename=\"mattermost.log\"")
 
 		bodyString := string(resData)
-		for i := 0; i < 20; i++ {
+		for i := range 20 {
 			assert.Contains(t, bodyString, fmt.Sprintf(`"msg":"%d"`, i))
 		}
 	})
@@ -448,13 +503,16 @@ func TestDownloadLogs(t *testing.T) {
 	require.Error(t, err)
 	CheckForbiddenStatus(t, resp)
 
-	th.Client.Logout(context.Background())
+	_, err = th.Client.Logout(context.Background())
+	require.NoError(t, err)
+
 	_, resp, err = th.Client.DownloadLogs(context.Background())
 	require.Error(t, err)
 	CheckUnauthorizedStatus(t, resp)
 }
 
 func TestPostLog(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 	client := th.Client
@@ -479,7 +537,8 @@ func TestPostLog(t *testing.T) {
 
 	*th.App.Config().ServiceSettings.EnableDeveloper = true
 
-	client.Logout(context.Background())
+	_, err = client.Logout(context.Background())
+	require.NoError(t, err)
 
 	_, _, err = client.PostLog(context.Background(), message)
 	require.NoError(t, err)
@@ -496,6 +555,7 @@ func TestPostLog(t *testing.T) {
 }
 
 func TestGetAnalyticsOld(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t).InitBasic()
 	defer th.TearDown()
 	client := th.Client
@@ -544,28 +604,32 @@ func TestGetAnalyticsOld(t *testing.T) {
 	assert.Equal(t, "total_websocket_connections", rows2[5].Name)
 	assert.Equal(t, float64(0), rows2[5].Value)
 
-	WebSocketClient, err := th.CreateWebSocketClient()
-	require.NoError(t, err)
-	time.Sleep(100 * time.Millisecond)
+	WebSocketClient := th.CreateConnectedWebSocketClient(t)
 	rows2, _, err = th.SystemAdminClient.GetAnalyticsOld(context.Background(), "standard", "")
 	require.NoError(t, err)
 	assert.Equal(t, "total_websocket_connections", rows2[5].Name)
 	assert.Equal(t, float64(1), rows2[5].Value)
-
 	WebSocketClient.Close()
+
+	// Give it a second for internal webhub counters to be updated after the client disconnects.
+	// Test can be flaky otherwise.
+	time.Sleep(time.Second)
 
 	rows2, _, err = th.SystemAdminClient.GetAnalyticsOld(context.Background(), "standard", "")
 	require.NoError(t, err)
 	assert.Equal(t, "total_websocket_connections", rows2[5].Name)
 	assert.Equal(t, float64(0), rows2[5].Value)
 
-	client.Logout(context.Background())
+	_, err = client.Logout(context.Background())
+	require.NoError(t, err)
+
 	_, resp, err = client.GetAnalyticsOld(context.Background(), "", th.BasicTeam.Id)
 	require.Error(t, err)
 	CheckUnauthorizedStatus(t, resp)
 }
 
 func TestS3TestConnection(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 	client := th.Client
@@ -651,6 +715,7 @@ func TestS3TestConnection(t *testing.T) {
 }
 
 func TestSupportedTimezones(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 	client := th.Client
@@ -663,12 +728,14 @@ func TestSupportedTimezones(t *testing.T) {
 }
 
 func TestRedirectLocation(t *testing.T) {
+	mainHelper.Parallel(t)
 	expected := "https://mattermost.com/wp-content/themes/mattermostv2/img/logo-light.svg"
 
 	testServer := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		res.Header().Set("Location", expected)
 		res.WriteHeader(http.StatusFound)
-		res.Write([]byte("body"))
+		_, err := res.Write([]byte("body"))
+		require.NoError(t, err)
 	}))
 	defer func() { testServer.Close() }()
 
@@ -714,7 +781,9 @@ func TestRedirectLocation(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, actual, "")
 
-	client.Logout(context.Background())
+	_, err = client.Logout(context.Background())
+	require.NoError(t, err)
+
 	_, resp, err = client.GetRedirectLocation(context.Background(), "", "")
 	require.Error(t, err)
 	CheckUnauthorizedStatus(t, resp)
@@ -726,7 +795,8 @@ func TestRedirectLocation(t *testing.T) {
 	testServer2 := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		res.Header().Set("Location", almostTooLongUrl)
 		res.WriteHeader(http.StatusFound)
-		res.Write([]byte("body"))
+		_, err = res.Write([]byte("body"))
+		require.NoError(t, err)
 	}))
 	defer func() { testServer2.Close() }()
 
@@ -738,7 +808,8 @@ func TestRedirectLocation(t *testing.T) {
 	testServer3 := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		res.Header().Set("Location", tooLongUrl)
 		res.WriteHeader(http.StatusFound)
-		res.Write([]byte("body"))
+		_, err = res.Write([]byte("body"))
+		require.NoError(t, err)
 	}))
 	defer func() { testServer3.Close() }()
 
@@ -748,6 +819,7 @@ func TestRedirectLocation(t *testing.T) {
 }
 
 func TestSetServerBusy(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 
@@ -768,6 +840,7 @@ func TestSetServerBusy(t *testing.T) {
 }
 
 func TestSetServerBusyInvalidParam(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 
@@ -783,6 +856,7 @@ func TestSetServerBusyInvalidParam(t *testing.T) {
 }
 
 func TestClearServerBusy(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 
@@ -803,6 +877,7 @@ func TestClearServerBusy(t *testing.T) {
 }
 
 func TestGetServerBusy(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 
@@ -823,6 +898,7 @@ func TestGetServerBusy(t *testing.T) {
 }
 
 func TestServerBusy503(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 
@@ -849,13 +925,6 @@ func TestServerBusy503(t *testing.T) {
 		CheckServiceUnavailableStatus(t, resp)
 	})
 
-	t.Run("search archived channels while busy", func(t *testing.T) {
-		cs := &model.ChannelSearch{}
-		_, resp, err := th.SystemAdminClient.SearchArchivedChannels(context.Background(), "foo", cs)
-		require.Error(t, err)
-		CheckServiceUnavailableStatus(t, resp)
-	})
-
 	th.App.Srv().Platform().Busy.Clear()
 
 	t.Run("search users while not busy", func(t *testing.T) {
@@ -866,6 +935,7 @@ func TestServerBusy503(t *testing.T) {
 }
 
 func TestPushNotificationAck(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t).InitBasic()
 	api, err := Init(th.Server)
 	require.NoError(t, err)
@@ -933,7 +1003,8 @@ func TestPushNotificationAck(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			defer func() {
 				session.AddProp(model.SessionPropDeviceNotificationDisabled, "")
-				th.Server.Store().Session().UpdateProps(session)
+				err = th.Server.Store().Session().UpdateProps(session)
+				require.NoError(t, err)
 				th.App.ClearSessionCacheForUser(session.UserId)
 			}()
 
@@ -958,6 +1029,7 @@ func TestPushNotificationAck(t *testing.T) {
 }
 
 func TestCompleteOnboarding(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 
@@ -973,7 +1045,8 @@ func TestCompleteOnboarding(t *testing.T) {
 	require.NoError(t, err)
 	pluginServer := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		res.WriteHeader(http.StatusOK)
-		res.Write(tarData)
+		_, err = res.Write(tarData)
+		require.NoError(t, err)
 	}))
 	defer pluginServer.Close()
 
@@ -999,7 +1072,8 @@ func TestCompleteOnboarding(t *testing.T) {
 		var data []byte
 		data, err = json.Marshal(samplePlugins)
 		require.NoError(t, err)
-		res.Write(data)
+		_, err = res.Write(data)
+		require.NoError(t, err)
 	}))
 	defer marketplaceServer.Close()
 
@@ -1089,6 +1163,7 @@ func TestCompleteOnboarding(t *testing.T) {
 }
 
 func TestGetAppliedSchemaMigrations(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 
@@ -1116,6 +1191,7 @@ func TestGetAppliedSchemaMigrations(t *testing.T) {
 }
 
 func TestCheckHasNilFields(t *testing.T) {
+	mainHelper.Parallel(t)
 	t.Run("check if the empty struct has nil fields", func(t *testing.T) {
 		var s model.FileSettings
 		res := checkHasNilFields(&s)

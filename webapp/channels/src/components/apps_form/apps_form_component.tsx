@@ -3,7 +3,7 @@
 
 import React from 'react';
 import {Modal, Fade} from 'react-bootstrap';
-import {FormattedMessage, injectIntl} from 'react-intl';
+import {defineMessage, FormattedMessage, injectIntl} from 'react-intl';
 import type {WrappedComponentProps} from 'react-intl';
 
 import type {AppCallResponse, AppField, AppForm, AppFormValues, AppSelectOption, FormResponseData, AppLookupResponse, AppFormValue} from '@mattermost/types/apps';
@@ -21,7 +21,6 @@ import SuggestionList from 'components/suggestion/suggestion_list';
 import LoadingSpinner from 'components/widgets/loading/loading_spinner';
 
 import {filterEmptyOptions} from 'utils/apps';
-import {localizeMessage} from 'utils/utils';
 
 import type {DoAppCallResult} from 'types/apps';
 
@@ -34,6 +33,7 @@ export type AppsFormProps = {
     form: AppForm;
     isEmbedded?: boolean;
     onExited: () => void;
+    onHide?: () => void;
     actions: {
         submit: (submission: {
             values: AppFormValues;
@@ -91,8 +91,13 @@ export class AppsForm extends React.PureComponent<Props, State> {
 
     static getDerivedStateFromProps(nextProps: Props, prevState: State) {
         if (nextProps.form !== prevState.form) {
+            const values = {
+                ...prevState.values,
+                ...initFormValues(nextProps.form),
+            };
+
             return {
-                values: initFormValues(nextProps.form),
+                values,
                 form: nextProps.form,
             };
         }
@@ -290,6 +295,7 @@ export class AppsForm extends React.PureComponent<Props, State> {
     };
 
     onHide = () => {
+        this.props.onHide?.();
         this.handleHide(false);
     };
 
@@ -371,7 +377,7 @@ export class AppsForm extends React.PureComponent<Props, State> {
                 onHide={this.onHide}
                 onExited={this.props.onExited}
                 backdrop='static'
-                role='dialog'
+                role='none'
                 aria-labelledby='appsModalLabel'
             >
                 <form
@@ -452,10 +458,10 @@ export class AppsForm extends React.PureComponent<Props, State> {
         }
 
         return (
-            <React.Fragment>
+            <>
                 {iconComponent}
                 {title}
-            </React.Fragment>
+            </>
         );
     }
 
@@ -488,7 +494,7 @@ export class AppsForm extends React.PureComponent<Props, State> {
         const {fields, header} = this.props.form;
 
         return (fields || header) && (
-            <React.Fragment>
+            <>
                 {header && (
                     <AppsFormHeader
                         id='appsModalHeader'
@@ -496,14 +502,14 @@ export class AppsForm extends React.PureComponent<Props, State> {
                     />
                 )}
                 {this.renderElements()}
-            </React.Fragment>
+            </>
         );
     }
 
     renderFooter() {
-        const {fields} = this.props.form;
+        const {fields, submit_label: submitLabel} = this.props.form;
 
-        const submitText: React.ReactNode = (
+        const submitText: React.ReactNode = submitLabel || (
             <FormattedMessage
                 id='interactive_dialog.submit'
                 defaultMessage='Submit'
@@ -518,7 +524,7 @@ export class AppsForm extends React.PureComponent<Props, State> {
                 autoFocus={!fields || fields.length === 0}
                 className='btn btn-primary save-button'
                 spinning={Boolean(this.state.submitting)}
-                spinningText={localizeMessage({
+                spinningText={defineMessage({
                     id: 'interactive_dialog.submitting',
                     defaultMessage: 'Submitting...',
                 })}
@@ -550,7 +556,7 @@ export class AppsForm extends React.PureComponent<Props, State> {
         }
 
         return (
-            <React.Fragment>
+            <>
                 <div>
                     {this.state.formError && (
                         <div>
@@ -572,7 +578,7 @@ export class AppsForm extends React.PureComponent<Props, State> {
                     </button>
                     {submitButtons}
                 </div>
-            </React.Fragment>
+            </>
         );
     }
 

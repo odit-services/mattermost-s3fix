@@ -134,20 +134,20 @@ func (s *MmctlE2ETestSuite) TestConfigSetCmd() {
 	s.RunForSystemAdminAndLocal("Set config value for a given key", func(c client.Client) {
 		printer.Clean()
 
-		args := []string{"SqlSettings.DriverName", "mysql"}
+		args := []string{"SqlSettings.DriverName", "postgres"}
 		err := configSetCmdF(c, &cobra.Command{}, args)
 		s.Require().Nil(err)
 		s.Require().Len(printer.GetErrorLines(), 0)
 		s.Require().Len(printer.GetLines(), 1)
 		config, ok := printer.GetLines()[0].(*model.Config)
 		s.Require().True(ok)
-		s.Require().Equal("mysql", *(config.SqlSettings.DriverName))
+		s.Require().Equal("postgres", *(config.SqlSettings.DriverName))
 	})
 
 	s.RunForSystemAdminAndLocal("Get error if the key doesn't exist", func(c client.Client) {
 		printer.Clean()
 
-		args := []string{"SqlSettings.WrongKey", "mysql"}
+		args := []string{"SqlSettings.WrongKey", "postgres"}
 		err := configSetCmdF(c, &cobra.Command{}, args)
 		s.Require().NotNil(err)
 		s.Require().Len(printer.GetLines(), 0)
@@ -157,7 +157,7 @@ func (s *MmctlE2ETestSuite) TestConfigSetCmd() {
 	s.Run("Set config value for a given key without permissions", func() {
 		printer.Clean()
 
-		args := []string{"SqlSettings.DriverName", "mysql"}
+		args := []string{"SqlSettings.DriverName", "postgres"}
 		err := configSetCmdF(s.th.Client, &cobra.Command{}, args)
 		s.Require().NotNil(err)
 		s.Require().Len(printer.GetLines(), 0)
@@ -229,6 +229,175 @@ func (s *MmctlE2ETestSuite) TestConfigShowCmdF() {
 		err := configShowCmdF(s.th.Client, nil, nil)
 		s.Require().NotNil(err)
 		s.Require().Error(err, "You do not have the appropriate permissions")
+		s.Require().Len(printer.GetLines(), 0)
+		s.Require().Len(printer.GetErrorLines(), 0)
+	})
+}
+
+func (s *MmctlE2ETestSuite) TestConfigReloadCmdF() {
+	s.SetupTestHelper().InitBasic()
+
+	s.RunForSystemAdminAndLocal("Reload server config", func(c client.Client) {
+		printer.Clean()
+
+		err := configReloadCmdF(c, nil, nil)
+		s.Require().NoError(err)
+		s.Require().Len(printer.GetLines(), 0)
+		s.Require().Len(printer.GetErrorLines(), 0)
+	})
+
+	s.Run("Reload server config without permissions", func() {
+		printer.Clean()
+
+		err := configReloadCmdF(s.th.Client, nil, nil)
+		s.Require().NotNil(err)
+		s.Require().Error(err, "You do not have the appropriate permissions")
+		s.Require().Len(printer.GetLines(), 0)
+		s.Require().Len(printer.GetErrorLines(), 0)
+	})
+}
+
+func (s *MmctlE2ETestSuite) TestConfigExportCmdF() {
+	s.SetupTestHelper().InitBasic()
+
+	s.RunForSystemAdminAndLocal("Get config normally", func(c client.Client) {
+		printer.Clean()
+
+		err := configExportCmdF(c, &cobra.Command{}, nil)
+		s.Require().Nil(err)
+		s.Require().Len(printer.GetLines(), 1)
+		s.Require().Len(printer.GetErrorLines(), 0)
+
+		m, ok := printer.GetLines()[0].(map[string]any)
+		s.Require().True(ok)
+		if c == s.th.LocalClient {
+			// filter config is used to convert the config to a map[string]any
+			// local client has unrestricted access to the config
+			expectedConfig, err2 := model.FilterConfig(s.th.App.Config(), model.ConfigFilterOptions{GetConfigOptions: model.GetConfigOptions{}})
+			s.Require().NoError(err2)
+			s.Require().Equal(expectedConfig, m)
+		} else {
+			// filter config is used to convert the config to a map[string]any
+			// system admin client has restricted access to the config
+			expectedConfig, err2 := model.FilterConfig(s.th.App.GetSanitizedConfig(), model.ConfigFilterOptions{GetConfigOptions: model.GetConfigOptions{}})
+			s.Require().NoError(err2)
+			s.Require().Equal(expectedConfig, m)
+		}
+	})
+
+	s.Run("Should remove masked values for system admin client", func() {
+		printer.Clean()
+
+		exportCmd := &cobra.Command{}
+		exportCmd.Flags().Bool("remove-masked", true, "")
+		err := configExportCmdF(s.th.SystemAdminClient, exportCmd, nil)
+		s.Require().Nil(err)
+		s.Require().Len(printer.GetLines(), 1)
+		m, ok := printer.GetLines()[0].(map[string]any)
+		s.Require().True(ok)
+		ss, ok := m["SqlSettings"].(map[string]any)
+		s.Require().True(ok)
+		_, ok = ss["DataSource"]
+		s.Require().False(ok)
+		s.Require().Len(printer.GetErrorLines(), 0)
+	})
+
+	s.Run("Should retrieve configuration as-is with local client", func() {
+		printer.Clean()
+
+		exportCmd := &cobra.Command{}
+		err := configExportCmdF(s.th.LocalClient, exportCmd, nil)
+		s.Require().Nil(err)
+		s.Require().Len(printer.GetLines(), 1)
+		m, ok := printer.GetLines()[0].(map[string]any)
+		s.Require().True(ok)
+		ss, ok := m["SqlSettings"].(map[string]any)
+		s.Require().True(ok)
+		ds, ok := ss["DataSource"]
+		s.Require().True(ok)
+		cfg := s.th.App.Config()
+		s.Require().Equal(*cfg.SqlSettings.DataSource, ds)
+		s.Require().Len(printer.GetErrorLines(), 0)
+	})
+
+	s.RunForSystemAdminAndLocal("Should remove default values", func(c client.Client) {
+		printer.Clean()
+
+		exportCmd := &cobra.Command{}
+		exportCmd.Flags().Bool("remove-defaults", true, "")
+		err := configExportCmdF(c, exportCmd, nil)
+		s.Require().Nil(err)
+		s.Require().Len(printer.GetLines(), 1)
+		m, ok := printer.GetLines()[0].(map[string]any)
+		s.Require().True(ok)
+		ss, ok := m["TeamSettings"].(map[string]any)
+		s.Require().True(ok)
+		_, ok = ss["MaxUsersPerTeam"] // it's not being changed by the test suite
+		s.Require().False(ok)
+		s.Require().Len(printer.GetErrorLines(), 0)
+	})
+
+	s.Run("Get config value for a given key without permissions", func() {
+		printer.Clean()
+
+		err := configExportCmdF(s.th.Client, &cobra.Command{}, nil)
+		s.Require().NotNil(err)
+		s.Require().Len(printer.GetLines(), 0)
+		s.Require().Len(printer.GetErrorLines(), 0)
+	})
+}
+
+func (s *MmctlE2ETestSuite) TestConfigMigrateCmdF() {
+	s.SetupTestHelper().InitBasic()
+
+	s.Run("Should fail without the --local flag", func() {
+		printer.Clean()
+		args := []string{"config.json", "output.json"}
+
+		err := configMigrateCmdF(s.th.Client, &cobra.Command{}, args)
+		s.Require().Error(err)
+		s.Require().Equal("this command is only available in local mode. Please set the --local flag", err.Error())
+		s.Require().Len(printer.GetLines(), 0)
+		s.Require().Len(printer.GetErrorLines(), 0)
+	})
+
+	s.Run("Should be able to migrate config to file", func() {
+		printer.Clean()
+		args := []string{"config.json", "output.json"}
+
+		cmd := &cobra.Command{}
+		cmd.Flags().Bool("local", true, "")
+
+		err := configMigrateCmdF(s.th.LocalClient, cmd, args)
+		s.Require().NoError(err)
+		s.Require().Len(printer.GetErrorLines(), 0)
+	})
+
+	s.Run("Should be able to migrate config to database", func() {
+		printer.Clean()
+
+		// Get the current database DSN from the test configuration
+		currentDSN := *s.th.App.Config().SqlSettings.DataSource
+		args := []string{"config.json", currentDSN}
+
+		cmd := &cobra.Command{}
+		cmd.Flags().Bool("local", true, "")
+
+		err := configMigrateCmdF(s.th.LocalClient, cmd, args)
+		s.Require().NoError(err)
+		s.Require().Len(printer.GetErrorLines(), 0)
+	})
+
+	s.Run("Should fail on error when migrating config", func() {
+		printer.Clean()
+		args := []string{"from", "to"}
+
+		cmd := &cobra.Command{}
+		cmd.Flags().Bool("local", true, "")
+
+		err := configMigrateCmdF(s.th.LocalClient, cmd, args)
+		s.Require().Error(err)
+		s.Require().Equal("Failed to migrate config store.", err.Error())
 		s.Require().Len(printer.GetLines(), 0)
 		s.Require().Len(printer.GetErrorLines(), 0)
 	})

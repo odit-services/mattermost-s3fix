@@ -4,7 +4,6 @@
 package app
 
 import (
-	"context"
 	"fmt"
 	"sort"
 	"sync/atomic"
@@ -40,6 +39,7 @@ func init() {
 }
 
 func TestUnitUpdateConfig(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := SetupWithStoreMock(t)
 	defer th.TearDown()
 
@@ -85,7 +85,8 @@ func TestDoAdvancedPermissionsMigration(t *testing.T) {
 
 	th.ResetRoleMigration()
 
-	th.App.DoAdvancedPermissionsMigration()
+	err := th.App.DoAdvancedPermissionsMigration()
+	require.NoError(t, err)
 
 	roleNames := []string{
 		"system_user",
@@ -147,6 +148,9 @@ func TestDoAdvancedPermissionsMigration(t *testing.T) {
 			model.PermissionEditBookmarkPrivateChannel.Id,
 			model.PermissionDeleteBookmarkPrivateChannel.Id,
 			model.PermissionOrderBookmarkPrivateChannel.Id,
+			model.PermissionManagePublicChannelBanner.Id,
+			model.PermissionManagePrivateChannelBanner.Id,
+			model.PermissionManageChannelAccessRules.Id,
 		},
 		"team_user": {
 			model.PermissionListTeamChannels.Id,
@@ -190,6 +194,9 @@ func TestDoAdvancedPermissionsMigration(t *testing.T) {
 			model.PermissionEditBookmarkPrivateChannel.Id,
 			model.PermissionDeleteBookmarkPrivateChannel.Id,
 			model.PermissionOrderBookmarkPrivateChannel.Id,
+			model.PermissionManagePublicChannelBanner.Id,
+			model.PermissionManagePrivateChannelBanner.Id,
+			model.PermissionManageChannelAccessRules.Id,
 		},
 		"system_user": {
 			model.PermissionListPublicTeams.Id,
@@ -224,7 +231,7 @@ func TestDoAdvancedPermissionsMigration(t *testing.T) {
 
 	// Check the migration matches what's expected.
 	for name, permissions := range expected1 {
-		role, err := th.App.GetRoleByName(context.Background(), name)
+		role, err := th.App.GetRoleByName(th.Context, name)
 		assert.Nil(t, err)
 		assert.Equal(t, role.Permissions, permissions, fmt.Sprintf("role %q didn't match", name))
 	}
@@ -232,14 +239,15 @@ func TestDoAdvancedPermissionsMigration(t *testing.T) {
 	th.App.Srv().SetLicense(model.NewTestLicense())
 
 	// Check the migration doesn't change anything if run again.
-	th.App.DoAdvancedPermissionsMigration()
+	err = th.App.DoAdvancedPermissionsMigration()
+	require.NoError(t, err)
 
 	roles2, err2 := th.App.GetRolesByNames(roleNames)
 	assert.Nil(t, err2)
 	assert.Equal(t, len(roles2), len(roleNames))
 
 	for name, permissions := range expected1 {
-		role, err := th.App.GetRoleByName(context.Background(), name)
+		role, err := th.App.GetRoleByName(th.Context, name)
 		assert.Nil(t, err)
 		assert.Equal(t, permissions, role.Permissions)
 	}
@@ -253,9 +261,10 @@ func TestDoEmojisPermissionsMigration(t *testing.T) {
 	sort.Strings(expectedSystemAdmin)
 
 	th.ResetEmojisMigration()
-	th.App.DoEmojisPermissionsMigration()
+	err := th.App.DoEmojisPermissionsMigration()
+	require.NoError(t, err)
 
-	role3, err3 := th.App.GetRoleByName(context.Background(), model.SystemUserRoleId)
+	role3, err3 := th.App.GetRoleByName(th.Context, model.SystemUserRoleId)
 	assert.Nil(t, err3)
 	expected3 := []string{
 		model.PermissionCreateCustomGroup.Id,
@@ -276,13 +285,14 @@ func TestDoEmojisPermissionsMigration(t *testing.T) {
 	sort.Strings(role3.Permissions)
 	assert.Equal(t, expected3, role3.Permissions, fmt.Sprintf("'%v' did not have expected permissions", model.SystemUserRoleId))
 
-	systemAdmin2, systemAdminErr2 := th.App.GetRoleByName(context.Background(), model.SystemAdminRoleId)
+	systemAdmin2, systemAdminErr2 := th.App.GetRoleByName(th.Context, model.SystemAdminRoleId)
 	assert.Nil(t, systemAdminErr2)
 	sort.Strings(systemAdmin2.Permissions)
 	assert.Equal(t, expectedSystemAdmin, systemAdmin2.Permissions, fmt.Sprintf("'%v' did not have expected permissions", model.SystemAdminRoleId))
 }
 
 func TestDBHealthCheckWriteAndDelete(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 

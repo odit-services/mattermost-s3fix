@@ -18,9 +18,7 @@ import (
 	"github.com/mattermost/mattermost/server/public/model"
 )
 
-var (
-	rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
-)
+var rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 func setupForSharedChannels(tb testing.TB) *TestHelper {
 	th := SetupConfig(tb, func(cfg *model.Config) {
@@ -36,6 +34,7 @@ func setupForSharedChannels(tb testing.TB) *TestHelper {
 }
 
 func TestGetAllSharedChannels(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := setupForSharedChannels(t).InitBasic()
 	defer th.TearDown()
 
@@ -45,7 +44,7 @@ func TestGetAllSharedChannels(t *testing.T) {
 	savedIds := make([]string, 0, pages*pageSize)
 
 	// make some shared channels
-	for i := 0; i < pages*pageSize; i++ {
+	for i := range pages * pageSize {
 		channel := th.CreateChannelWithClientAndTeam(th.Client, model.ChannelTypeOpen, th.BasicTeam.Id)
 		sc := &model.SharedChannel{
 			ChannelId: channel.Id,
@@ -64,7 +63,7 @@ func TestGetAllSharedChannels(t *testing.T) {
 
 	t.Run("get shared channels paginated", func(t *testing.T) {
 		channelIds := make([]string, 0, 21)
-		for i := 0; i < pages; i++ {
+		for i := range pages {
 			channels, _, err := th.Client.GetAllSharedChannels(context.Background(), th.BasicTeam.Id, i, pageSize)
 			require.NoError(t, err)
 			channelIds = append(channelIds, getIds(channels)...)
@@ -107,6 +106,7 @@ func randomBool() bool {
 }
 
 func TestGetRemoteClusterById(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := setupForSharedChannels(t).InitBasic()
 	defer th.TearDown()
 
@@ -161,11 +161,37 @@ func TestGetRemoteClusterById(t *testing.T) {
 }
 
 func TestCreateDirectChannelWithRemoteUser(t *testing.T) {
-	t.Run("creates a local DM channel that is shared", func(t *testing.T) {
+	mainHelper.Parallel(t)
+	t.Run("should not create a local DM channel that is shared", func(t *testing.T) {
 		th := setupForSharedChannels(t).InitBasic()
 		defer th.TearDown()
 		client := th.Client
-		defer client.Logout(context.Background())
+		defer func() {
+			_, err := client.Logout(context.Background())
+			require.NoError(t, err)
+		}()
+
+		localUser := th.BasicUser
+		remoteUser := th.CreateUser()
+		remoteUser.RemoteId = model.NewPointer(model.NewId())
+		remoteUser, appErr := th.App.UpdateUser(th.Context, remoteUser, false)
+		require.Nil(t, appErr)
+
+		dm, _, err := client.CreateDirectChannel(context.Background(), localUser.Id, remoteUser.Id)
+		require.Error(t, err)
+		require.Nil(t, dm)
+	})
+
+	t.Run("creates a local DM channel that is shared", func(t *testing.T) {
+		t.Skip("Remote DMs are currently disabled")
+
+		th := setupForSharedChannels(t).InitBasic()
+		defer th.TearDown()
+		client := th.Client
+		defer func() {
+			_, err := client.Logout(context.Background())
+			require.NoError(t, err)
+		}()
 
 		localUser := th.BasicUser
 		remoteUser := th.CreateUser()
@@ -182,10 +208,15 @@ func TestCreateDirectChannelWithRemoteUser(t *testing.T) {
 	})
 
 	t.Run("sends a shared channel invitation to the remote", func(t *testing.T) {
+		t.Skip("Remote DMs are currently disabled")
+
 		th := setupForSharedChannels(t).InitBasic()
 		defer th.TearDown()
 		client := th.Client
-		defer client.Logout(context.Background())
+		defer func() {
+			_, err := client.Logout(context.Background())
+			require.NoError(t, err)
+		}()
 
 		localUser := th.BasicUser
 		remoteUser := th.CreateUser()
@@ -211,10 +242,15 @@ func TestCreateDirectChannelWithRemoteUser(t *testing.T) {
 	})
 
 	t.Run("does not send a shared channel invitation to the remote when creator is remote", func(t *testing.T) {
+		t.Skip("Remote DMs are currently disabled")
+
 		th := setupForSharedChannels(t).InitBasic()
 		defer th.TearDown()
 		client := th.Client
-		defer client.Logout(context.Background())
+		defer func() {
+			_, err := client.Logout(context.Background())
+			require.NoError(t, err)
+		}()
 
 		localUser := th.BasicUser
 		remoteUser := th.CreateUser()
@@ -241,6 +277,7 @@ func TestCreateDirectChannelWithRemoteUser(t *testing.T) {
 }
 
 func TestGetSharedChannelRemotesByRemoteCluster(t *testing.T) {
+	mainHelper.Parallel(t)
 	t.Run("Should not work if the remote cluster service is not enabled", func(t *testing.T) {
 		th := Setup(t)
 		defer th.TearDown()
@@ -499,6 +536,7 @@ func TestGetSharedChannelRemotesByRemoteCluster(t *testing.T) {
 }
 
 func TestInviteRemoteClusterToChannel(t *testing.T) {
+	mainHelper.Parallel(t)
 	t.Run("Should not work if the remote cluster service is not enabled", func(t *testing.T) {
 		th := Setup(t)
 		defer th.TearDown()
@@ -544,6 +582,7 @@ func TestInviteRemoteClusterToChannel(t *testing.T) {
 }
 
 func TestUninviteRemoteClusterToChannel(t *testing.T) {
+	mainHelper.Parallel(t)
 	t.Run("Should not work if the remote cluster service is not enabled", func(t *testing.T) {
 		th := Setup(t)
 		defer th.TearDown()

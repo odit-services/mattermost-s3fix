@@ -17,6 +17,7 @@ import (
 )
 
 func TestPluginPublicKeys(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := SetupWithStoreMock(t)
 	defer th.TearDown()
 
@@ -42,7 +43,8 @@ func TestPluginPublicKeys(t *testing.T) {
 	fileReader, err := os.Open(filepath.Join(path, publicKeyFilename))
 	require.NoError(t, err)
 	defer fileReader.Close()
-	th.App.AddPublicKey(publicKeyFilename, fileReader)
+	appErr := th.App.AddPublicKey(publicKeyFilename, fileReader)
+	require.Nil(t, appErr)
 	file, appErr := th.App.GetPublicKey(publicKeyFilename)
 	require.Nil(t, appErr)
 	require.Equal(t, publicKey, file)
@@ -63,6 +65,7 @@ func TestPluginPublicKeys(t *testing.T) {
 }
 
 func TestVerifySignature(t *testing.T) {
+	mainHelper.Parallel(t)
 	path, _ := fileutils.FindDir("tests")
 	pluginFilename := "testplugin.tar.gz"
 	signatureFilename := "testplugin.tar.gz.sig"

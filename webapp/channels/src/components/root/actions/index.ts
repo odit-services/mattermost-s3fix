@@ -18,13 +18,13 @@ import {General} from 'mattermost-redux/constants';
 import {isCollapsedThreadsEnabled, getIsOnboardingFlowEnabled} from 'mattermost-redux/selectors/entities/preferences';
 import {getActiveTeamsList} from 'mattermost-redux/selectors/entities/teams';
 import {checkIsFirstAdmin, getCurrentUser, isCurrentUserSystemAdmin} from 'mattermost-redux/selectors/entities/users';
-import type {ActionFuncAsync, ThunkActionFunc} from 'mattermost-redux/types/actions';
 
 import {redirectUserToDefaultTeam, emitUserLoggedOutEvent} from 'actions/global_actions';
 
 import {ActionTypes, StoragePrefixes} from 'utils/constants';
 import {doesCookieContainsMMUserId} from 'utils/utils';
 
+import type {ActionFuncAsync, ThunkActionFunc} from 'types/store';
 import type {Translations} from 'types/store/i18n';
 
 export type TranslationPluginFunction = (locale: string) => Translations
@@ -99,12 +99,12 @@ export function registerCustomPostRenderer(type: string, component: any, id: str
     };
 }
 
-export function redirectToOnboardingOrDefaultTeam(history: History): ThunkActionFunc<void> {
+export function redirectToOnboardingOrDefaultTeam(history: History, searchParams?: URLSearchParams): ThunkActionFunc<void> {
     return async (dispatch, getState) => {
         const state = getState();
         const isUserAdmin = isCurrentUserSystemAdmin(state);
         if (!isUserAdmin) {
-            redirectUserToDefaultTeam();
+            redirectUserToDefaultTeam(searchParams);
             return;
         }
 
@@ -113,19 +113,19 @@ export function redirectToOnboardingOrDefaultTeam(history: History): ThunkAction
         const onboardingFlowEnabled = getIsOnboardingFlowEnabled(state);
 
         if (teams.length > 0 || !onboardingFlowEnabled) {
-            redirectUserToDefaultTeam();
+            redirectUserToDefaultTeam(searchParams);
             return;
         }
 
         const firstAdminSetupComplete = await dispatch(getFirstAdminSetupComplete());
         if (firstAdminSetupComplete?.data) {
-            redirectUserToDefaultTeam();
+            redirectUserToDefaultTeam(searchParams);
             return;
         }
 
         const profilesResult = await dispatch(getProfiles(0, General.PROFILE_CHUNK_SIZE, {roles: General.SYSTEM_ADMIN_ROLE}));
         if (profilesResult.error) {
-            redirectUserToDefaultTeam();
+            redirectUserToDefaultTeam(searchParams);
             return;
         }
         const currentUser = getCurrentUser(getState());
@@ -141,7 +141,7 @@ export function redirectToOnboardingOrDefaultTeam(history: History): ThunkAction
             return;
         }
 
-        redirectUserToDefaultTeam();
+        redirectUserToDefaultTeam(searchParams);
     };
 }
 

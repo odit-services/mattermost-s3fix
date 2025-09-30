@@ -7,11 +7,11 @@ import {Draggable} from 'react-beautiful-dnd';
 import {defineMessages, useIntl} from 'react-intl';
 import {Link} from 'react-router-dom';
 
-import {mark, trackEvent} from 'actions/telemetry_actions.jsx';
+import {mark} from 'actions/telemetry_actions';
 
 import TeamIcon from 'components/widgets/team_icon/team_icon';
 import WithTooltip from 'components/with_tooltip';
-import {ShortcutKeys} from 'components/with_tooltip/shortcut';
+import {ShortcutKeys} from 'components/with_tooltip/tooltip_shortcut';
 
 import {Mark} from 'utils/performance_telemetry';
 
@@ -61,13 +61,9 @@ export default function TeamButton({
     const {formatMessage} = useIntl();
 
     const handleSwitch = useCallback((e: React.MouseEvent) => {
-        mark(Mark.TeamLinkClicked);
         e.preventDefault();
+        mark(Mark.TeamLinkClicked);
         switchTeam(url);
-
-        setTimeout(() => {
-            trackEvent('ui', 'ui_team_sidebar_switch_team');
-        }, 0);
     }, [switchTeam, url]);
 
     let teamClass: string = otherProps.active ? 'active' : '';
@@ -153,7 +149,6 @@ export default function TeamButton({
         <WithTeamTooltip
             order={order}
             tip={tip}
-            url={url}
         >
             <div className={'team-btn ' + btnClass}>
                 {!otherProps.isInProduct && badge}
@@ -165,7 +160,7 @@ export default function TeamButton({
     const teamButton = (
         <Link
             id={`${url.slice(1)}TeamButton`}
-            aria-label={ariaLabel}
+            aria-label={isNotCreateTeamButton ? ariaLabel : displayName}
             to={url}
             onClick={handleSwitch}
         >
@@ -180,20 +175,23 @@ export default function TeamButton({
         >
             {(provided, snapshot) => {
                 return (
-                    <div
-                        className='draggable-team-container'
+                    <Link
+                        to={url}
+                        id={`${url.slice(1)}TeamButton`}
+                        aria-label={ariaLabel}
+                        onClick={handleSwitch}
+                        className='draggable-team-container inline-block'
                         ref={provided.innerRef}
                         {...provided.draggableProps}
                         {...provided.dragHandleProps}
-                        tabIndex={-1}
                     >
                         <div
                             className={classNames([`team-container ${teamClass}`, {isDragging: snapshot.isDragging}])}
                         >
-                            {teamButton}
+                            {btn}
                             {orderIndicator}
                         </div>
-                    </div>
+                    </Link>
                 );
             }}
         </Draggable>
@@ -211,9 +209,8 @@ export default function TeamButton({
 function WithTeamTooltip({
     order,
     tip,
-    url,
     children,
-}: React.PropsWithChildren<Pick<Props, 'order' | 'tip' | 'url'>>) {
+}: React.PropsWithChildren<Pick<Props, 'order' | 'tip'>>) {
     const intl = useIntl();
 
     const shortcut = useMemo(() => {
@@ -227,12 +224,14 @@ function WithTeamTooltip({
         };
     }, [order]);
 
+    if (!React.isValidElement(children)) {
+        return null;
+    }
+
     return (
         <WithTooltip
-            id={`tooltip-${url}`}
             title={tip || intl.formatMessage(messages.nameUndefined)}
             shortcut={shortcut}
-            placement='right'
         >
             {children}
         </WithTooltip>

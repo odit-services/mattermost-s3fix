@@ -16,6 +16,7 @@ import (
 )
 
 func TestGetPreferences(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t).InitBasic()
 	defer th.TearDown()
 	client := th.Client
@@ -45,7 +46,8 @@ func TestGetPreferences(t *testing.T) {
 		},
 	}
 
-	client.UpdatePreferences(context.Background(), user1.Id, preferences1)
+	_, err := client.UpdatePreferences(context.Background(), user1.Id, preferences1)
+	require.NoError(t, err)
 
 	prefs, _, err := client.GetPreferences(context.Background(), user1.Id)
 	require.NoError(t, err)
@@ -70,7 +72,8 @@ func TestGetPreferences(t *testing.T) {
 	require.Error(t, err)
 	CheckForbiddenStatus(t, resp)
 
-	client.Logout(context.Background())
+	_, err = client.Logout(context.Background())
+	require.NoError(t, err)
 	_, resp, err = client.GetPreferences(context.Background(), th.BasicUser2.Id)
 	require.Error(t, err)
 	CheckUnauthorizedStatus(t, resp)
@@ -85,6 +88,7 @@ func TestGetPreferences(t *testing.T) {
 }
 
 func TestGetPreferencesByCategory(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t).InitBasic()
 	defer th.TearDown()
 	client := th.Client
@@ -111,7 +115,8 @@ func TestGetPreferencesByCategory(t *testing.T) {
 		},
 	}
 
-	client.UpdatePreferences(context.Background(), user1.Id, preferences1)
+	_, err := client.UpdatePreferences(context.Background(), user1.Id, preferences1)
+	require.NoError(t, err)
 
 	prefs, _, err := client.GetPreferencesByCategory(context.Background(), user1.Id, category)
 	require.NoError(t, err)
@@ -138,7 +143,8 @@ func TestGetPreferencesByCategory(t *testing.T) {
 
 	require.Equal(t, len(prefs), 0, "received the wrong number of preferences")
 
-	client.Logout(context.Background())
+	_, err = client.Logout(context.Background())
+	require.NoError(t, err)
 	_, resp, err = client.GetPreferencesByCategory(context.Background(), th.BasicUser2.Id, category)
 	require.Error(t, err)
 	CheckUnauthorizedStatus(t, resp)
@@ -153,6 +159,7 @@ func TestGetPreferencesByCategory(t *testing.T) {
 }
 
 func TestGetPreferenceByCategoryAndName(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t).InitBasic()
 	defer th.TearDown()
 	client := th.Client
@@ -177,7 +184,8 @@ func TestGetPreferenceByCategoryAndName(t *testing.T) {
 		},
 	}
 
-	client.UpdatePreferences(context.Background(), user.Id, preferences)
+	_, err := client.UpdatePreferences(context.Background(), user.Id, preferences)
+	require.NoError(t, err)
 
 	pref, _, err := client.GetPreferenceByCategoryAndName(context.Background(), user.Id, model.PreferenceCategoryDirectChannelShow, name)
 	require.NoError(t, err)
@@ -187,7 +195,8 @@ func TestGetPreferenceByCategoryAndName(t *testing.T) {
 	require.Equal(t, preferences[0].Name, pref.Name, "Name preference not saved")
 
 	preferences[0].Value = model.NewId()
-	client.UpdatePreferences(context.Background(), user.Id, preferences)
+	_, err = client.UpdatePreferences(context.Background(), user.Id, preferences)
+	require.NoError(t, err)
 
 	_, resp, err := client.GetPreferenceByCategoryAndName(context.Background(), user.Id, "junk", preferences[0].Name)
 	require.Error(t, err)
@@ -204,7 +213,8 @@ func TestGetPreferenceByCategoryAndName(t *testing.T) {
 	_, _, err = client.GetPreferenceByCategoryAndName(context.Background(), user.Id, preferences[0].Category, preferences[0].Name)
 	require.NoError(t, err)
 
-	client.Logout(context.Background())
+	_, err = client.Logout(context.Background())
+	require.NoError(t, err)
 	_, resp, err = client.GetPreferenceByCategoryAndName(context.Background(), user.Id, preferences[0].Category, preferences[0].Name)
 	require.Error(t, err)
 	CheckUnauthorizedStatus(t, resp)
@@ -219,6 +229,7 @@ func TestGetPreferenceByCategoryAndName(t *testing.T) {
 }
 
 func TestUpdatePreferences(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t).InitBasic()
 	defer th.TearDown()
 	client := th.Client
@@ -275,7 +286,8 @@ func TestUpdatePreferences(t *testing.T) {
 	require.Error(t, err)
 	CheckForbiddenStatus(t, resp)
 
-	client.Logout(context.Background())
+	_, err = client.Logout(context.Background())
+	require.NoError(t, err)
 	resp, err = client.UpdatePreferences(context.Background(), user1.Id, preferences1)
 	require.Error(t, err)
 	CheckUnauthorizedStatus(t, resp)
@@ -297,6 +309,7 @@ func TestUpdatePreferences(t *testing.T) {
 }
 
 func TestUpdatePreferencesOverload(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t).InitBasic()
 	defer th.TearDown()
 	client := th.Client
@@ -333,16 +346,11 @@ func TestUpdatePreferencesOverload(t *testing.T) {
 }
 
 func TestUpdatePreferencesWebsocket(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t).InitBasic()
 	defer th.TearDown()
 
-	WebSocketClient, err := th.CreateWebSocketClient()
-	require.NoError(t, err)
-
-	WebSocketClient.Listen()
-	time.Sleep(300 * time.Millisecond)
-	wsResp := <-WebSocketClient.ResponseChannel
-	require.Equal(t, wsResp.Status, model.StatusOk, "expected OK from auth challenge")
+	WebSocketClient := th.CreateConnectedWebSocketClient(t)
 
 	userId := th.BasicUser.Id
 	preferences := model.Preferences{
@@ -358,7 +366,7 @@ func TestUpdatePreferencesWebsocket(t *testing.T) {
 		},
 	}
 
-	_, err = th.Client.UpdatePreferences(context.Background(), userId, preferences)
+	_, err := th.Client.UpdatePreferences(context.Background(), userId, preferences)
 	require.NoError(t, err)
 
 	timeout := time.After(300 * time.Millisecond)
@@ -390,6 +398,7 @@ func TestUpdatePreferencesWebsocket(t *testing.T) {
 }
 
 func TestUpdateSidebarPreferences(t *testing.T) {
+	mainHelper.Parallel(t)
 	t.Run("when favoriting a channel, should add it to the Favorites sidebar category", func(t *testing.T) {
 		th := Setup(t).InitBasic()
 		defer th.TearDown()
@@ -617,6 +626,7 @@ func TestUpdateSidebarPreferences(t *testing.T) {
 }
 
 func TestDeletePreferences(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t).InitBasic()
 	defer th.TearDown()
 	client := th.Client
@@ -628,7 +638,7 @@ func TestDeletePreferences(t *testing.T) {
 
 	// save 10 preferences
 	var preferences model.Preferences
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		preference := model.Preference{
 			UserId:   th.BasicUser.Id,
 			Category: model.PreferenceCategoryDirectChannelShow,
@@ -637,7 +647,8 @@ func TestDeletePreferences(t *testing.T) {
 		preferences = append(preferences, preference)
 	}
 
-	client.UpdatePreferences(context.Background(), th.BasicUser.Id, preferences)
+	_, err := client.UpdatePreferences(context.Background(), th.BasicUser.Id, preferences)
+	require.NoError(t, err)
 
 	// delete 10 preferences
 	th.LoginBasic2()
@@ -658,7 +669,8 @@ func TestDeletePreferences(t *testing.T) {
 	prefs, _, _ = client.GetPreferences(context.Background(), th.BasicUser.Id)
 	require.Len(t, prefs, originalCount, "should've deleted preferences")
 
-	client.Logout(context.Background())
+	_, err = client.Logout(context.Background())
+	require.NoError(t, err)
 	resp, err = client.DeletePreferences(context.Background(), th.BasicUser.Id, preferences)
 	require.Error(t, err)
 	CheckUnauthorizedStatus(t, resp)
@@ -674,7 +686,8 @@ func TestDeletePreferences(t *testing.T) {
 			Value:    "true",
 		}
 		preferences = append(preferences, preference)
-		c.UpdatePreferences(context.Background(), th.BasicUser.Id, preferences)
+		_, err = c.UpdatePreferences(context.Background(), th.BasicUser.Id, preferences)
+		require.NoError(t, err)
 
 		// Delete Prefrerences Operation
 		resp, err = c.DeletePreferences(context.Background(), th.BasicUser.Id, preferences)
@@ -684,6 +697,7 @@ func TestDeletePreferences(t *testing.T) {
 }
 
 func TestDeletePreferencesOverload(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t).InitBasic()
 	defer th.TearDown()
 	client := th.Client
@@ -720,6 +734,7 @@ func TestDeletePreferencesOverload(t *testing.T) {
 }
 
 func TestDeletePreferencesWebsocket(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t).InitBasic()
 	defer th.TearDown()
 
@@ -739,12 +754,7 @@ func TestDeletePreferencesWebsocket(t *testing.T) {
 	_, err := th.Client.UpdatePreferences(context.Background(), userId, preferences)
 	require.NoError(t, err)
 
-	WebSocketClient, err := th.CreateWebSocketClient()
-	require.NoError(t, err)
-
-	WebSocketClient.Listen()
-	wsResp := <-WebSocketClient.ResponseChannel
-	require.Equal(t, model.StatusOk, wsResp.Status, "should have responded OK to authentication challenge")
+	WebSocketClient := th.CreateConnectedWebSocketClient(t)
 
 	_, err = th.Client.DeletePreferences(context.Background(), userId, preferences)
 	require.NoError(t, err)
@@ -778,6 +788,7 @@ func TestDeletePreferencesWebsocket(t *testing.T) {
 }
 
 func TestDeleteSidebarPreferences(t *testing.T) {
+	mainHelper.Parallel(t)
 	t.Run("when removing a favorited channel preference, should remove it from the Favorites sidebar category", func(t *testing.T) {
 		th := Setup(t).InitBasic()
 		defer th.TearDown()
@@ -993,6 +1004,7 @@ func TestDeleteSidebarPreferences(t *testing.T) {
 }
 
 func TestUpdateLimitVisibleDMsGMs(t *testing.T) {
+	mainHelper.Parallel(t)
 	t.Run("Update limit_visible_dms_gms to a valid value", func(t *testing.T) {
 		th := Setup(t).InitBasic()
 		defer th.TearDown()

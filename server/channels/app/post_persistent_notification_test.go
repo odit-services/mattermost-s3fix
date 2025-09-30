@@ -14,6 +14,7 @@ import (
 )
 
 func TestResolvePersistentNotification(t *testing.T) {
+	mainHelper.Parallel(t)
 	t.Run("should not delete when no posts exist", func(t *testing.T) {
 		th := SetupWithStoreMock(t)
 		defer th.TearDown()
@@ -148,6 +149,7 @@ func TestResolvePersistentNotification(t *testing.T) {
 }
 
 func TestDeletePersistentNotification(t *testing.T) {
+	mainHelper.Parallel(t)
 	t.Run("should not delete when no posts exist", func(t *testing.T) {
 		th := SetupWithStoreMock(t)
 		defer th.TearDown()
@@ -195,10 +197,12 @@ func TestDeletePersistentNotification(t *testing.T) {
 }
 
 func TestSendPersistentNotifications(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t).InitBasic()
 	defer th.TearDown()
 
-	th.App.AddUserToChannel(th.Context, th.BasicUser2, th.BasicChannel, false)
+	_, appErr := th.App.AddUserToChannel(th.Context, th.BasicUser2, th.BasicChannel, false)
+	require.Nil(t, appErr)
 
 	s := "Urgent"
 	tr := true
@@ -213,7 +217,7 @@ func TestSendPersistentNotifications(t *testing.T) {
 			},
 		},
 	}
-	_, appErr := th.App.CreatePost(th.Context, p1, th.BasicChannel, false, false)
+	_, appErr = th.App.CreatePost(th.Context, p1, th.BasicChannel, model.CreatePostFlags{})
 	require.Nil(t, appErr)
 
 	err := th.App.SendPersistentNotifications()

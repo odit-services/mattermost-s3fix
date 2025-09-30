@@ -29,19 +29,22 @@ import (
 
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/shared/httpservice"
+	"github.com/mattermost/mattermost/server/public/shared/mlog"
+	"github.com/mattermost/mattermost/server/public/shared/request"
 	"github.com/mattermost/mattermost/server/v8/channels/app/platform"
 	"github.com/mattermost/mattermost/server/v8/channels/utils/testutils"
 	"github.com/mattermost/mattermost/server/v8/platform/services/imageproxy"
 )
 
 func TestPreparePostListForClient(t *testing.T) {
+	mainHelper.Parallel(t)
 	// Most of this logic is covered by TestPreparePostForClient, so this just tests handling of multiple posts
 
 	th := Setup(t)
 	defer th.TearDown()
 
 	postList := model.NewPostList()
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		postList.AddPost(&model.Post{})
 	}
 
@@ -66,12 +69,13 @@ func TestPreparePostListForClient(t *testing.T) {
 }
 
 func TestPreparePostForClient(t *testing.T) {
+	mainHelper.Parallel(t)
 	var serverURL string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/":
 			w.Header().Set("Content-Type", "text/html")
-			w.Write([]byte(`
+			_, err := w.Write([]byte(`
 			<html>
 			<head>
 			<meta property="og:image" content="` + serverURL + `/test-image3.png" />
@@ -82,24 +86,28 @@ func TestPreparePostForClient(t *testing.T) {
 			<meta property="og:description" content="Contribute to hmhealey/test-files development by creating an account on GitHub." />
 			</head>
 			</html>`))
+			require.NoError(t, err)
 		case "/test-image1.png":
 			file, err := testutils.ReadTestFile("test.png")
 			require.NoError(t, err)
 
 			w.Header().Set("Content-Type", "image/png")
-			w.Write(file)
+			_, err = w.Write(file)
+			require.NoError(t, err)
 		case "/test-image2.png":
 			file, err := testutils.ReadTestFile("test-data-graph.png")
 			require.NoError(t, err)
 
 			w.Header().Set("Content-Type", "image/png")
-			w.Write(file)
+			_, err = w.Write(file)
+			require.NoError(t, err)
 		case "/test-image3.png":
 			file, err := testutils.ReadTestFile("qa-data-graph.png")
 			require.NoError(t, err)
 
 			w.Header().Set("Content-Type", "image/png")
-			w.Write(file)
+			_, err = w.Write(file)
+			require.NoError(t, err)
 		default:
 			require.Fail(t, "Invalid path", r.URL.Path)
 		}
@@ -190,7 +198,7 @@ func TestPreparePostForClient(t *testing.T) {
 			UserId:    th.BasicUser.Id,
 			ChannelId: th.BasicChannel.Id,
 			FileIds:   []string{fileInfo.Id},
-		}, th.BasicChannel, false, true)
+		}, th.BasicChannel, model.CreatePostFlags{SetOnline: true})
 		require.Nil(t, err)
 
 		fileInfo.PostId = post.Id
@@ -219,13 +227,13 @@ func TestPreparePostForClient(t *testing.T) {
 			ChannelId: th.BasicChannel.Id,
 			Message:   ":" + emoji.Name + ": :taco:",
 			Props: map[string]any{
-				"attachments": []*model.SlackAttachment{
+				model.PostPropsAttachments: []*model.SlackAttachment{
 					{
 						Text: ":" + emoji.Name + ":",
 					},
 				},
 			},
-		}, th.BasicChannel, false, true)
+		}, th.BasicChannel, model.CreatePostFlags{SetOnline: true})
 		require.Nil(t, err)
 
 		th.AddReactionToPost(post, th.BasicUser, "smile")
@@ -263,13 +271,13 @@ func TestPreparePostForClient(t *testing.T) {
 			ChannelId: th.BasicChannel.Id,
 			Message:   ":" + emoji3.Name + ": :taco:",
 			Props: map[string]any{
-				"attachments": []*model.SlackAttachment{
+				model.PostPropsAttachments: []*model.SlackAttachment{
 					{
 						Text: ":" + emoji4.Name + ":",
 					},
 				},
 			},
-		}, th.BasicChannel, false, true)
+		}, th.BasicChannel, model.CreatePostFlags{SetOnline: true})
 		require.Nil(t, err)
 
 		th.AddReactionToPost(post, th.BasicUser, emoji1.Name)
@@ -303,7 +311,7 @@ func TestPreparePostForClient(t *testing.T) {
 				UserId:    th.BasicUser.Id,
 				ChannelId: th.BasicChannel.Id,
 				Message:   "Test",
-			}, th.BasicChannel, false, true)
+			}, th.BasicChannel, model.CreatePostFlags{SetOnline: true})
 
 			require.Nil(t, err)
 
@@ -360,7 +368,7 @@ func TestPreparePostForClient(t *testing.T) {
 			UserId:    th.BasicUser.Id,
 			ChannelId: th.BasicChannel.Id,
 			Message:   fmt.Sprintf("This is ![our logo](%s/test-image2.png) and ![our icon](%s/test-image1.png)", server.URL, server.URL),
-		}, th.BasicChannel, false, true)
+		}, th.BasicChannel, model.CreatePostFlags{SetOnline: true})
 		require.Nil(t, err)
 
 		clientPost := th.App.PreparePostForClient(th.Context, post, false, false, false)
@@ -389,7 +397,7 @@ func TestPreparePostForClient(t *testing.T) {
 			UserId:    th.BasicUser.Id,
 			ChannelId: th.BasicChannel.Id,
 			Message:   "some post",
-		}, th.BasicChannel, false, true)
+		}, th.BasicChannel, model.CreatePostFlags{SetOnline: true})
 		require.Nil(t, err)
 
 		// this value expected to be a string
@@ -423,7 +431,7 @@ func TestPreparePostForClient(t *testing.T) {
 			ChannelId: th.BasicChannel.Id,
 			Message: `This is our logo: ` + server.URL + `/test-image2.png
 	And this is our icon: ` + server.URL + `/test-image1.png`,
-		}, th.BasicChannel, false, true)
+		}, th.BasicChannel, model.CreatePostFlags{SetOnline: true})
 		require.Nil(t, err)
 		post.Metadata.Embeds = nil
 		clientPost := th.App.PreparePostForClientWithEmbedsAndImages(th.Context, post, false, false, false)
@@ -458,7 +466,7 @@ func TestPreparePostForClient(t *testing.T) {
 			UserId:    th.BasicUser.Id,
 			ChannelId: th.BasicChannel.Id,
 			Message:   `This is our web page: ` + server.URL,
-		}, th.BasicChannel, false, true)
+		}, th.BasicChannel, model.CreatePostFlags{SetOnline: true})
 		require.Nil(t, err)
 
 		clientPost := th.App.PreparePostForClient(th.Context, post, false, false, false)
@@ -527,9 +535,9 @@ func TestPreparePostForClient(t *testing.T) {
 						ChannelId: th.BasicChannel.Id,
 						Message:   `Bla bla bla: ` + fmt.Sprintf(tc.link, noAccessServer.URL),
 					}
-					prepost.AddProp(UnsafeLinksPostProp, "true")
+					prepost.AddProp(model.PostPropsUnsafeLinks, "true")
 
-					post, err := th.App.CreatePost(th.Context, prepost, th.BasicChannel, false, true)
+					post, err := th.App.CreatePost(th.Context, prepost, th.BasicChannel, model.CreatePostFlags{SetOnline: true})
 					require.Nil(t, err)
 
 					clientPost := th.App.PreparePostForClient(th.Context, post, false, false, false)
@@ -545,7 +553,7 @@ func TestPreparePostForClient(t *testing.T) {
 							Message:   `Bla bla bla: ` + fmt.Sprintf(tc.link, server.URL),
 						}
 
-						post, err := th.App.CreatePost(th.Context, prepost, th.BasicChannel, false, true)
+						post, err := th.App.CreatePost(th.Context, prepost, th.BasicChannel, model.CreatePostFlags{SetOnline: true})
 						require.Nil(t, err)
 
 						clientPost := th.App.PreparePostForClient(th.Context, post, false, false, false)
@@ -565,13 +573,13 @@ func TestPreparePostForClient(t *testing.T) {
 			UserId:    th.BasicUser.Id,
 			ChannelId: th.BasicChannel.Id,
 			Props: map[string]any{
-				"attachments": []any{
+				model.PostPropsAttachments: []any{
 					map[string]any{
 						"text": "![icon](" + server.URL + "/test-image1.png)",
 					},
 				},
 			},
-		}, th.BasicChannel, false, true)
+		}, th.BasicChannel, model.CreatePostFlags{SetOnline: true})
 		require.Nil(t, err)
 		post.Metadata.Embeds = nil
 		clientPost := th.App.PreparePostForClientWithEmbedsAndImages(th.Context, post, false, false, false)
@@ -607,7 +615,7 @@ func TestPreparePostForClient(t *testing.T) {
 			FileIds:   []string{fileInfo.Id},
 			UserId:    th.BasicUser.Id,
 			ChannelId: th.BasicChannel.Id,
-		}, th.BasicChannel, false, true)
+		}, th.BasicChannel, model.CreatePostFlags{SetOnline: true})
 		require.Nil(t, err)
 		post.Metadata.Embeds = nil
 
@@ -641,7 +649,7 @@ func TestPreparePostForClient(t *testing.T) {
 			UserId:    th.BasicUser.Id,
 			ChannelId: th.BasicChannel.Id,
 			Message:   "hello world",
-		}, th.BasicChannel, false, true)
+		}, th.BasicChannel, model.CreatePostFlags{SetOnline: true})
 		require.Nil(t, err)
 		referencedPost.Metadata.Embeds = nil
 
@@ -651,7 +659,7 @@ func TestPreparePostForClient(t *testing.T) {
 			UserId:    th.BasicUser.Id,
 			ChannelId: th.BasicChannel.Id,
 			Message:   link,
-		}, th.BasicChannel, false, true)
+		}, th.BasicChannel, model.CreatePostFlags{SetOnline: true})
 		require.Nil(t, err)
 		previewPost.Metadata.Embeds = nil
 		clientPost := th.App.PreparePostForClientWithEmbedsAndImages(th.Context, previewPost, false, false, false)
@@ -673,7 +681,7 @@ func TestPreparePostForClient(t *testing.T) {
 		directChannel, err := th.App.createDirectChannel(th.Context, th.BasicUser.Id, th.BasicUser2.Id)
 		require.Nil(t, err)
 
-		groupChannel, err := th.App.createGroupChannel(th.Context, []string{th.BasicUser.Id, th.BasicUser2.Id, th.CreateUser().Id})
+		groupChannel, err := th.App.createGroupChannel(th.Context, []string{th.BasicUser.Id, th.BasicUser2.Id, th.CreateUser().Id}, th.BasicUser.Id)
 		require.Nil(t, err)
 
 		testCases := []struct {
@@ -699,7 +707,7 @@ func TestPreparePostForClient(t *testing.T) {
 					UserId:    th.BasicUser.Id,
 					ChannelId: testCase.Channel.Id,
 					Message:   "hello world",
-				}, th.BasicChannel, false, true)
+				}, th.BasicChannel, model.CreatePostFlags{SetOnline: true})
 				require.Nil(t, err)
 				referencedPost.Metadata.Embeds = nil
 
@@ -709,7 +717,7 @@ func TestPreparePostForClient(t *testing.T) {
 					UserId:    th.BasicUser.Id,
 					ChannelId: th.BasicChannel.Id,
 					Message:   link,
-				}, th.BasicChannel, false, true)
+				}, th.BasicChannel, model.CreatePostFlags{SetOnline: true})
 				require.Nil(t, err)
 				previewPost.Metadata.Embeds = nil
 
@@ -737,7 +745,7 @@ func TestPreparePostForClient(t *testing.T) {
 			UserId:    th.BasicUser.Id,
 			ChannelId: th.BasicChannel.Id,
 			Message:   `This is our logo: ` + server.URL + `/test-image2.png`,
-		}, th.BasicChannel, false, true)
+		}, th.BasicChannel, model.CreatePostFlags{SetOnline: true})
 		require.Nil(t, err)
 		referencedPost.Metadata.Embeds = nil
 
@@ -747,7 +755,7 @@ func TestPreparePostForClient(t *testing.T) {
 			UserId:    th.BasicUser.Id,
 			ChannelId: th.BasicChannel.Id,
 			Message:   link,
-		}, th.BasicChannel, false, true)
+		}, th.BasicChannel, model.CreatePostFlags{SetOnline: true})
 		require.Nil(t, err)
 		previewPost.Metadata.Embeds = nil
 
@@ -774,7 +782,7 @@ func TestPreparePostForClient(t *testing.T) {
 			UserId:    th.BasicUser.Id,
 			ChannelId: th.BasicChannel.Id,
 			Message:   `This is our logo: ` + server.URL + `/test-image2.png`,
-		}, th.BasicChannel, false, true)
+		}, th.BasicChannel, model.CreatePostFlags{SetOnline: true})
 		require.Nil(t, err)
 		nestedPermalinkPost.Metadata.Embeds = nil
 
@@ -784,7 +792,7 @@ func TestPreparePostForClient(t *testing.T) {
 			UserId:    th.BasicUser.Id,
 			ChannelId: th.BasicChannel.Id,
 			Message:   nestedLink,
-		}, th.BasicChannel, false, true)
+		}, th.BasicChannel, model.CreatePostFlags{SetOnline: true})
 		require.Nil(t, err)
 		referencedPost.Metadata.Embeds = nil
 
@@ -794,7 +802,7 @@ func TestPreparePostForClient(t *testing.T) {
 			UserId:    th.BasicUser.Id,
 			ChannelId: th.BasicChannel.Id,
 			Message:   link,
-		}, th.BasicChannel, false, true)
+		}, th.BasicChannel, model.CreatePostFlags{SetOnline: true})
 		require.Nil(t, err)
 		previewPost.Metadata.Embeds = nil
 
@@ -821,7 +829,7 @@ func TestPreparePostForClient(t *testing.T) {
 			UserId:    th.BasicUser.Id,
 			ChannelId: th.BasicChannel.Id,
 			Message:   "hello world",
-		}, th.BasicChannel, false, true)
+		}, th.BasicChannel, model.CreatePostFlags{SetOnline: true})
 		require.Nil(t, err)
 
 		link := fmt.Sprintf("%s/%s/pl/%s", *th.App.Config().ServiceSettings.SiteURL, th.BasicTeam.Name, referencedPost.Id)
@@ -830,7 +838,7 @@ func TestPreparePostForClient(t *testing.T) {
 			UserId:    th.BasicUser.Id,
 			ChannelId: th.BasicChannel.Id,
 			Message:   link,
-		}, th.BasicChannel, false, true)
+		}, th.BasicChannel, model.CreatePostFlags{SetOnline: true})
 		require.Nil(t, err)
 
 		clientPost := th.App.PreparePostForClient(th.Context, previewPost, false, false, false)
@@ -856,6 +864,7 @@ func TestPreparePostForClient(t *testing.T) {
 }
 
 func TestPreparePostForClientWithImageProxy(t *testing.T) {
+	mainHelper.Parallel(t)
 	setup := func(t *testing.T) *TestHelper {
 		th := Setup(t).InitBasic()
 
@@ -916,7 +925,7 @@ func testProxyOpenGraphImage(t *testing.T, th *TestHelper, shouldProxy bool) {
 		switch r.URL.Path {
 		case "/":
 			w.Header().Set("Content-Type", "text/html")
-			w.Write([]byte(`
+			_, err := w.Write([]byte(`
 			<html>
 			<head>
 			<meta property="og:image" content="` + serverURL + `/test-image3.png" />
@@ -927,12 +936,14 @@ func testProxyOpenGraphImage(t *testing.T, th *TestHelper, shouldProxy bool) {
 			<meta property="og:description" content="Contribute to hmhealey/test-files development by creating an account on GitHub." />
 			</head>
 			</html>`))
+			require.NoError(t, err)
 		case "/test-image3.png":
 			file, err := testutils.ReadTestFile("qa-data-graph.png")
 			require.NoError(t, err)
 
 			w.Header().Set("Content-Type", "image/png")
-			w.Write(file)
+			_, err = w.Write(file)
+			require.NoError(t, err)
 		default:
 			require.Fail(t, "Invalid path", r.URL.Path)
 		}
@@ -944,7 +955,7 @@ func testProxyOpenGraphImage(t *testing.T, th *TestHelper, shouldProxy bool) {
 		UserId:    th.BasicUser.Id,
 		ChannelId: th.BasicChannel.Id,
 		Message:   `This is our web page: ` + server.URL,
-	}, th.BasicChannel, false, true)
+	}, th.BasicChannel, model.CreatePostFlags{SetOnline: true})
 	require.Nil(t, err)
 
 	post.Metadata.Embeds = nil
@@ -973,40 +984,45 @@ func testProxyOpenGraphImage(t *testing.T, th *TestHelper, shouldProxy bool) {
 }
 
 func TestGetEmbedForPost(t *testing.T) {
+	mainHelper.Parallel(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/index.html" {
 			w.Header().Set("Content-Type", "text/html")
 			if r.Header.Get("Accept-Language") == "fr" {
 				w.Header().Set("Content-Language", "fr")
-				w.Write([]byte(`
+				_, err := w.Write([]byte(`
 				<html>
 				<head>
 				<meta property="og:title" content="Title-FR" />
 				<meta property="og:description" content="Bonjour le monde" />
 				</head>
 				</html>`))
+				require.NoError(t, err)
 			} else {
-				w.Write([]byte(`
+				_, err := w.Write([]byte(`
 				<html>
 				<head>
 				<meta property="og:title" content="Title" />
 				<meta property="og:description" content="Hello world" />
 				</head>
 				</html>`))
+				require.NoError(t, err)
 			}
 		} else if r.URL.Path == "/image.png" {
 			file, err := testutils.ReadTestFile("test.png")
 			require.NoError(t, err)
 
 			w.Header().Set("Content-Type", "image/png")
-			w.Write(file)
+			_, err = w.Write(file)
+			require.NoError(t, err)
 		} else if r.URL.Path == "/other" {
 			w.Header().Set("Content-Type", "text/html")
-			w.Write([]byte(`
+			_, err := w.Write([]byte(`
 			<html>
 			<head>
 			</head>
 			</html>`))
+			require.NoError(t, err)
 		} else {
 			require.Fail(t, "Invalid path", r.URL.Path)
 		}
@@ -1029,7 +1045,7 @@ func TestGetEmbedForPost(t *testing.T) {
 		t.Run("should return a message attachment when the post has one", func(t *testing.T) {
 			embed, err := th.App.getEmbedForPost(th.Context, &model.Post{
 				Props: model.StringInterface{
-					"attachments": []*model.SlackAttachment{
+					model.PostPropsAttachments: []*model.SlackAttachment{
 						{
 							Text: "test",
 						},
@@ -1107,7 +1123,7 @@ func TestGetEmbedForPost(t *testing.T) {
 		t.Run("should return an embedded message attachment", func(t *testing.T) {
 			embed, err := th.App.getEmbedForPost(th.Context, &model.Post{
 				Props: model.StringInterface{
-					"attachments": []*model.SlackAttachment{
+					model.PostPropsAttachments: []*model.SlackAttachment{
 						{
 							Text: "test",
 						},
@@ -1145,6 +1161,7 @@ func TestGetEmbedForPost(t *testing.T) {
 }
 
 func TestGetImagesForPost(t *testing.T) {
+	mainHelper.Parallel(t)
 	t.Run("with an image link", func(t *testing.T) {
 		th := Setup(t)
 		defer th.TearDown()
@@ -1158,7 +1175,8 @@ func TestGetImagesForPost(t *testing.T) {
 			require.NoError(t, err)
 
 			w.Header().Set("Content-Type", "image/png")
-			w.Write(file)
+			_, err = w.Write(file)
+			require.NoError(t, err)
 		}))
 
 		post := &model.Post{
@@ -1214,7 +1232,8 @@ func TestGetImagesForPost(t *testing.T) {
 				img := image.NewGray(image.Rect(0, 0, 200, 300))
 
 				var encoder png.Encoder
-				encoder.Encode(w, img)
+				err := encoder.Encode(w, img)
+				require.NoError(t, err)
 			} else {
 				w.WriteHeader(http.StatusNotFound)
 			}
@@ -1268,7 +1287,8 @@ func TestGetImagesForPost(t *testing.T) {
 				img := image.NewGray(image.Rect(0, 0, 300, 400))
 
 				var encoder png.Encoder
-				encoder.Encode(w, img)
+				err := encoder.Encode(w, img)
+				require.NoError(t, err)
 			} else {
 				w.WriteHeader(http.StatusNotFound)
 			}
@@ -1322,7 +1342,8 @@ func TestGetImagesForPost(t *testing.T) {
 				img := image.NewGray(image.Rect(0, 0, 400, 500))
 
 				var encoder png.Encoder
-				encoder.Encode(w, img)
+				err := encoder.Encode(w, img)
+				require.NoError(t, err)
 			} else {
 				w.WriteHeader(http.StatusNotFound)
 			}
@@ -1429,6 +1450,7 @@ func TestGetImagesForPost(t *testing.T) {
 }
 
 func TestGetEmojiNamesForString(t *testing.T) {
+	mainHelper.Parallel(t)
 	testCases := []struct {
 		Description string
 		Input       string
@@ -1480,6 +1502,7 @@ func TestGetEmojiNamesForString(t *testing.T) {
 }
 
 func TestGetEmojiNamesForPost(t *testing.T) {
+	mainHelper.Parallel(t)
 	testCases := []struct {
 		Description string
 		Post        *model.Post
@@ -1518,7 +1541,7 @@ func TestGetEmojiNamesForPost(t *testing.T) {
 			Post: &model.Post{
 				Message: "this is a post",
 				Props: map[string]any{
-					"attachments": []*model.SlackAttachment{
+					model.PostPropsAttachments: []*model.SlackAttachment{
 						{
 							Text:    ":emoji1:",
 							Pretext: ":emoji2:",
@@ -1546,7 +1569,7 @@ func TestGetEmojiNamesForPost(t *testing.T) {
 			Post: &model.Post{
 				Message: "this is :emoji1",
 				Props: map[string]any{
-					"attachments": []*model.SlackAttachment{
+					model.PostPropsAttachments: []*model.SlackAttachment{
 						{
 							Text:    ":emoji2:",
 							Pretext: ":emoji2:",
@@ -1575,6 +1598,7 @@ func TestGetEmojiNamesForPost(t *testing.T) {
 }
 
 func TestGetCustomEmojisForPost(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t).InitBasic()
 	defer th.TearDown()
 
@@ -1602,7 +1626,7 @@ func TestGetCustomEmojisForPost(t *testing.T) {
 		post := &model.Post{
 			Message: ":" + emojis[1].Name + ":",
 			Props: map[string]any{
-				"attachments": []*model.SlackAttachment{
+				model.PostPropsAttachments: []*model.SlackAttachment{
 					{
 						Pretext: ":" + emojis[2].Name + ":",
 						Text:    ":" + emojis[3].Name + ":",
@@ -1628,7 +1652,7 @@ func TestGetCustomEmojisForPost(t *testing.T) {
 		post := &model.Post{
 			Message: ":secret: :" + emojis[0].Name + ":",
 			Props: map[string]any{
-				"attachments": []*model.SlackAttachment{
+				model.PostPropsAttachments: []*model.SlackAttachment{
 					{
 						Text: ":imaginary:",
 					},
@@ -1654,6 +1678,7 @@ func TestGetCustomEmojisForPost(t *testing.T) {
 }
 
 func TestGetFirstLinkAndImages(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t).InitBasic()
 	defer th.TearDown()
 
@@ -1711,12 +1736,27 @@ func TestGetFirstLinkAndImages(t *testing.T) {
 			ExpectedFirstLink: "",
 			ExpectedImages:    []string{},
 		},
+		"http link in angle brackets": {
+			Input:             "this is a <http://example.com>",
+			ExpectedFirstLink: "http://example.com",
+			ExpectedImages:    []string{},
+		},
+		"http link with only opening angle bracket": {
+			Input:             "this is a <http://example.com",
+			ExpectedFirstLink: "http://example.com",
+			ExpectedImages:    []string{},
+		},
+		"http link with only closing angle bracket": {
+			Input:             "this is a http://example.com>",
+			ExpectedFirstLink: "http://example.com",
+			ExpectedImages:    []string{},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			firstLink, images := th.App.getFirstLinkAndImages(th.Context, testCase.Input)
 
-			assert.Equal(t, firstLink, testCase.ExpectedFirstLink)
-			assert.Equal(t, images, testCase.ExpectedImages)
+			assert.Equal(t, testCase.ExpectedFirstLink, firstLink)
+			assert.Equal(t, testCase.ExpectedImages, images)
 		})
 	}
 
@@ -1807,6 +1847,7 @@ func TestGetFirstLinkAndImages(t *testing.T) {
 }
 
 func TestGetImagesInMessageAttachments(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t).InitBasic()
 	defer th.TearDown()
 
@@ -1824,7 +1865,7 @@ func TestGetImagesInMessageAttachments(t *testing.T) {
 			Name: "empty attachments",
 			Post: &model.Post{
 				Props: map[string]any{
-					"attachments": []*model.SlackAttachment{},
+					model.PostPropsAttachments: []*model.SlackAttachment{},
 				},
 			},
 			Expected: []string{},
@@ -1833,7 +1874,7 @@ func TestGetImagesInMessageAttachments(t *testing.T) {
 			Name: "attachment with no fields that can contain images",
 			Post: &model.Post{
 				Props: map[string]any{
-					"attachments": []*model.SlackAttachment{
+					model.PostPropsAttachments: []*model.SlackAttachment{
 						{
 							Title: "This is the title",
 						},
@@ -1846,7 +1887,7 @@ func TestGetImagesInMessageAttachments(t *testing.T) {
 			Name: "images in text",
 			Post: &model.Post{
 				Props: map[string]any{
-					"attachments": []*model.SlackAttachment{
+					model.PostPropsAttachments: []*model.SlackAttachment{
 						{
 							Text: "![logo](https://example.com/logo) and ![icon](https://example.com/icon)",
 						},
@@ -1859,7 +1900,7 @@ func TestGetImagesInMessageAttachments(t *testing.T) {
 			Name: "images in pretext",
 			Post: &model.Post{
 				Props: map[string]any{
-					"attachments": []*model.SlackAttachment{
+					model.PostPropsAttachments: []*model.SlackAttachment{
 						{
 							Pretext: "![logo](https://example.com/logo1) and ![icon](https://example.com/icon1)",
 						},
@@ -1872,7 +1913,7 @@ func TestGetImagesInMessageAttachments(t *testing.T) {
 			Name: "images in fields",
 			Post: &model.Post{
 				Props: map[string]any{
-					"attachments": []*model.SlackAttachment{
+					model.PostPropsAttachments: []*model.SlackAttachment{
 						{
 							Fields: []*model.SlackAttachmentField{
 								{
@@ -1889,7 +1930,7 @@ func TestGetImagesInMessageAttachments(t *testing.T) {
 			Name: "image in author_icon",
 			Post: &model.Post{
 				Props: map[string]any{
-					"attachments": []*model.SlackAttachment{
+					model.PostPropsAttachments: []*model.SlackAttachment{
 						{
 							AuthorIcon: "https://example.com/icon2",
 						},
@@ -1902,7 +1943,7 @@ func TestGetImagesInMessageAttachments(t *testing.T) {
 			Name: "image in image_url",
 			Post: &model.Post{
 				Props: map[string]any{
-					"attachments": []*model.SlackAttachment{
+					model.PostPropsAttachments: []*model.SlackAttachment{
 						{
 							ImageURL: "https://example.com/image",
 						},
@@ -1915,7 +1956,7 @@ func TestGetImagesInMessageAttachments(t *testing.T) {
 			Name: "image in thumb_url",
 			Post: &model.Post{
 				Props: map[string]any{
-					"attachments": []*model.SlackAttachment{
+					model.PostPropsAttachments: []*model.SlackAttachment{
 						{
 							ThumbURL: "https://example.com/image",
 						},
@@ -1928,7 +1969,7 @@ func TestGetImagesInMessageAttachments(t *testing.T) {
 			Name: "image in footer_icon",
 			Post: &model.Post{
 				Props: map[string]any{
-					"attachments": []*model.SlackAttachment{
+					model.PostPropsAttachments: []*model.SlackAttachment{
 						{
 							FooterIcon: "https://example.com/image",
 						},
@@ -1941,7 +1982,7 @@ func TestGetImagesInMessageAttachments(t *testing.T) {
 			Name: "images in multiple fields",
 			Post: &model.Post{
 				Props: map[string]any{
-					"attachments": []*model.SlackAttachment{
+					model.PostPropsAttachments: []*model.SlackAttachment{
 						{
 							Fields: []*model.SlackAttachmentField{
 								{
@@ -1961,7 +2002,7 @@ func TestGetImagesInMessageAttachments(t *testing.T) {
 			Name: "non-string field",
 			Post: &model.Post{
 				Props: map[string]any{
-					"attachments": []*model.SlackAttachment{
+					model.PostPropsAttachments: []*model.SlackAttachment{
 						{
 							Fields: []*model.SlackAttachmentField{
 								{
@@ -1978,7 +2019,7 @@ func TestGetImagesInMessageAttachments(t *testing.T) {
 			Name: "images in multiple locations",
 			Post: &model.Post{
 				Props: map[string]any{
-					"attachments": []*model.SlackAttachment{
+					model.PostPropsAttachments: []*model.SlackAttachment{
 						{
 							Text:    "![text](https://example.com/text)",
 							Pretext: "![pretext](https://example.com/pretext)",
@@ -2000,7 +2041,7 @@ func TestGetImagesInMessageAttachments(t *testing.T) {
 			Name: "multiple attachments",
 			Post: &model.Post{
 				Props: map[string]any{
-					"attachments": []*model.SlackAttachment{
+					model.PostPropsAttachments: []*model.SlackAttachment{
 						{
 							Text: "![logo](https://example.com/logo)",
 						},
@@ -2029,7 +2070,8 @@ func TestGetLinkMetadata(t *testing.T) {
 			*cfg.ServiceSettings.AllowedUntrustedInternalConnections = "127.0.0.1"
 		})
 
-		platform.PurgeLinkCache()
+		err := platform.PurgeLinkCache()
+		require.NoError(t, err)
 
 		return th
 	}
@@ -2042,13 +2084,14 @@ func TestGetLinkMetadata(t *testing.T) {
 
 			var encoder png.Encoder
 
-			encoder.Encode(w, img)
+			err := encoder.Encode(w, img)
+			require.NoError(t, err)
 		}
 
 		writeHTML := func(title string) {
 			w.Header().Set("Content-Type", "text/html")
 
-			w.Write([]byte(`
+			_, err := w.Write([]byte(`
 				<html prefix="og:http://ogp.me/ns#">
 				<head>
 				<meta property="og:title" content="` + title + `" />
@@ -2056,6 +2099,7 @@ func TestGetLinkMetadata(t *testing.T) {
 				<body>
 				</body>
 				</html>`))
+			require.NoError(t, err)
 		}
 
 		if strings.HasPrefix(r.URL.Path, "/image") {
@@ -2068,16 +2112,19 @@ func TestGetLinkMetadata(t *testing.T) {
 		} else if strings.HasPrefix(r.URL.Path, "/json") {
 			w.Header().Set("Content-Type", "application/json")
 
-			w.Write([]byte("true"))
+			_, err := w.Write([]byte("true"))
+			require.NoError(t, err)
 		} else if strings.HasPrefix(r.URL.Path, "/timeout") {
 			w.Header().Set("Content-Type", "text/html")
 
-			w.Write([]byte("<html>"))
+			_, err := w.Write([]byte("<html>"))
+			require.NoError(t, err)
 			select {
 			case <-time.After(60 * time.Second):
 			case <-r.Context().Done():
 			}
-			w.Write([]byte("</html>"))
+			_, err = w.Write([]byte("</html>"))
+			require.NoError(t, err)
 		} else if strings.HasPrefix(r.URL.Path, "/mixed") {
 			for _, acceptedType := range r.Header["Accept"] {
 				if strings.HasPrefix(acceptedType, "image/*") || strings.HasPrefix(acceptedType, "image/png") {
@@ -2100,7 +2147,7 @@ func TestGetLinkMetadata(t *testing.T) {
 		timestamp := int64(1547510400000)
 		title := "from cache"
 
-		cacheLinkMetadata(requestURL, timestamp, &opengraph.OpenGraph{Title: title}, nil, nil)
+		cacheLinkMetadata(th.Context, requestURL, timestamp, &opengraph.OpenGraph{Title: title}, nil, nil)
 
 		t.Run("should use cache if cached entry exists", func(t *testing.T) {
 			_, _, _, ok := getLinkMetadataFromCache(requestURL, timestamp)
@@ -2176,7 +2223,8 @@ func TestGetLinkMetadata(t *testing.T) {
 		th.App.saveLinkMetadataToDatabase(requestURL, timestamp, &opengraph.OpenGraph{Title: title}, nil)
 
 		t.Run("should use database if saved entry exists", func(t *testing.T) {
-			platform.PurgeLinkCache()
+			err := platform.PurgeLinkCache()
+			require.NoError(t, err)
 
 			_, _, _, ok := getLinkMetadataFromCache(requestURL, timestamp)
 			require.False(t, ok, "data should not exist in in-memory cache")
@@ -2193,7 +2241,8 @@ func TestGetLinkMetadata(t *testing.T) {
 		})
 
 		t.Run("should use database if saved entry exists near time", func(t *testing.T) {
-			platform.PurgeLinkCache()
+			err := platform.PurgeLinkCache()
+			require.NoError(t, err)
 
 			_, _, _, ok := getLinkMetadataFromCache(requestURL, timestamp)
 			require.False(t, ok, "data should not exist in in-memory cache")
@@ -2210,7 +2259,8 @@ func TestGetLinkMetadata(t *testing.T) {
 		})
 
 		t.Run("should not use database if URL is different", func(t *testing.T) {
-			platform.PurgeLinkCache()
+			err := platform.PurgeLinkCache()
+			require.NoError(t, err)
 
 			differentURL := requestURL + "/other"
 
@@ -2228,7 +2278,8 @@ func TestGetLinkMetadata(t *testing.T) {
 		})
 
 		t.Run("should not use database if timestamp is different", func(t *testing.T) {
-			platform.PurgeLinkCache()
+			err := platform.PurgeLinkCache()
+			require.NoError(t, err)
 
 			differentTimestamp := timestamp + 60*60*1000
 
@@ -2436,7 +2487,8 @@ func TestGetLinkMetadata(t *testing.T) {
 		_, _, _, ok = getLinkMetadataFromCache(requestURL, timestamp)
 		require.True(t, ok, "data should now exist in in-memory cache")
 
-		platform.PurgeLinkCache()
+		err = platform.PurgeLinkCache()
+		require.NoError(t, err)
 		_, _, _, ok = getLinkMetadataFromCache(requestURL, timestamp)
 		require.False(t, ok, "data should no longer exist in in-memory cache")
 
@@ -2465,7 +2517,7 @@ func TestGetLinkMetadata(t *testing.T) {
 		requestURL := server.URL + "/error?name=" + t.Name()
 		timestamp := int64(1547510400000)
 
-		cacheLinkMetadata(requestURL, timestamp, &opengraph.OpenGraph{Title: "cached"}, nil, nil)
+		cacheLinkMetadata(th.Context, requestURL, timestamp, &opengraph.OpenGraph{Title: "cached"}, nil, nil)
 
 		og, img, _, err := th.App.getLinkMetadata(th.Context, requestURL, timestamp, true, "")
 		assert.NotNil(t, og)
@@ -2538,7 +2590,7 @@ func TestGetLinkMetadata(t *testing.T) {
 		assert.Nil(t, img)
 		assert.Error(t, err)
 		assert.IsType(t, &url.Error{}, err)
-		assert.Equal(t, httpservice.ErrAddressForbidden, err.(*url.Error).Err)
+		assert.ErrorContains(t, err, httpservice.ErrAddressForbidden.Error())
 
 		requestURL = th.App.GetSiteURL() + "/api/v4/image?url=" + url.QueryEscape(requestURL)
 
@@ -2581,6 +2633,7 @@ func TestGetLinkMetadata(t *testing.T) {
 }
 
 func TestResolveMetadataURL(t *testing.T) {
+	mainHelper.Parallel(t)
 	for _, test := range []struct {
 		Name       string
 		RequestURL string
@@ -2622,6 +2675,7 @@ func TestResolveMetadataURL(t *testing.T) {
 }
 
 func TestParseLinkMetadata(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 
@@ -2648,7 +2702,7 @@ func TestParseLinkMetadata(t *testing.T) {
 	}
 
 	t.Run("image", func(t *testing.T) {
-		og, dimensions, err := th.App.parseLinkMetadata(imageURL, makeImageReader(), "image/png")
+		og, dimensions, err := th.App.parseLinkMetadata(th.Context, imageURL, makeImageReader(), "image/png")
 		assert.NoError(t, err)
 
 		assert.Nil(t, og)
@@ -2660,7 +2714,7 @@ func TestParseLinkMetadata(t *testing.T) {
 	})
 
 	t.Run("image with no content-type given", func(t *testing.T) {
-		og, dimensions, err := th.App.parseLinkMetadata(imageURL, makeImageReader(), "")
+		og, dimensions, err := th.App.parseLinkMetadata(th.Context, imageURL, makeImageReader(), "")
 		assert.NoError(t, err)
 
 		assert.Nil(t, og)
@@ -2672,7 +2726,7 @@ func TestParseLinkMetadata(t *testing.T) {
 	})
 
 	t.Run("malformed image", func(t *testing.T) {
-		og, dimensions, err := th.App.parseLinkMetadata(imageURL, makeOpenGraphReader(), "image/png")
+		og, dimensions, err := th.App.parseLinkMetadata(th.Context, imageURL, makeOpenGraphReader(), "image/png")
 		assert.Error(t, err)
 
 		assert.Nil(t, og)
@@ -2680,7 +2734,7 @@ func TestParseLinkMetadata(t *testing.T) {
 	})
 
 	t.Run("opengraph", func(t *testing.T) {
-		og, dimensions, err := th.App.parseLinkMetadata(ogURL, makeOpenGraphReader(), "text/html; charset=utf-8")
+		og, dimensions, err := th.App.parseLinkMetadata(th.Context, ogURL, makeOpenGraphReader(), "text/html; charset=utf-8")
 		assert.NoError(t, err)
 
 		assert.NotNil(t, og)
@@ -2691,7 +2745,7 @@ func TestParseLinkMetadata(t *testing.T) {
 	})
 
 	t.Run("malformed opengraph", func(t *testing.T) {
-		og, dimensions, err := th.App.parseLinkMetadata(ogURL, makeImageReader(), "text/html; charset=utf-8")
+		og, dimensions, err := th.App.parseLinkMetadata(th.Context, ogURL, makeImageReader(), "text/html; charset=utf-8")
 		assert.NoError(t, err)
 
 		assert.Nil(t, og)
@@ -2699,7 +2753,7 @@ func TestParseLinkMetadata(t *testing.T) {
 	})
 
 	t.Run("neither", func(t *testing.T) {
-		og, dimensions, err := th.App.parseLinkMetadata("http://example.com/test.wad", strings.NewReader("garbage"), "application/x-doom")
+		og, dimensions, err := th.App.parseLinkMetadata(th.Context, "http://example.com/test.wad", strings.NewReader("garbage"), "application/x-doom")
 		assert.NoError(t, err)
 
 		assert.Nil(t, og)
@@ -2707,7 +2761,7 @@ func TestParseLinkMetadata(t *testing.T) {
 	})
 
 	t.Run("svg", func(t *testing.T) {
-		og, dimensions, err := th.App.parseLinkMetadata("http://example.com/image.svg", nil, "image/svg+xml")
+		og, dimensions, err := th.App.parseLinkMetadata(th.Context, "http://example.com/image.svg", nil, "image/svg+xml")
 		assert.NoError(t, err)
 
 		assert.Nil(t, og)
@@ -2718,6 +2772,7 @@ func TestParseLinkMetadata(t *testing.T) {
 }
 
 func TestParseImages(t *testing.T) {
+	mainHelper.Parallel(t)
 	for name, testCase := range map[string]struct {
 		FileName    string
 		Expected    *model.PostImage
@@ -2729,6 +2784,78 @@ func TestParseImages(t *testing.T) {
 				Width:  408,
 				Height: 336,
 				Format: "png",
+			},
+		},
+		"jpg-1": {
+			FileName: "orientation_test_1.jpeg",
+			Expected: &model.PostImage{
+				Width:  2860,
+				Height: 1578,
+				Format: "jpeg",
+			},
+		},
+		"jpg-2": {
+			FileName: "orientation_test_2.jpeg",
+			Expected: &model.PostImage{
+				Width:  2860,
+				Height: 1578,
+				Format: "jpeg",
+			},
+		},
+		"jpg-3": {
+			FileName: "orientation_test_3.jpeg",
+			Expected: &model.PostImage{
+				Width:  2860,
+				Height: 1578,
+				Format: "jpeg",
+			},
+		},
+		"jpg-4": {
+			FileName: "orientation_test_4.jpeg",
+			Expected: &model.PostImage{
+				Width:  2860,
+				Height: 1578,
+				Format: "jpeg",
+			},
+		},
+		"jpg-5": {
+			FileName: "orientation_test_5.jpeg",
+			Expected: &model.PostImage{
+				Width:  2860,
+				Height: 1578,
+				Format: "jpeg",
+			},
+		},
+		"jpg-6": {
+			FileName: "orientation_test_6.jpeg",
+			Expected: &model.PostImage{
+				Width:  2860,
+				Height: 1578,
+				Format: "jpeg",
+			},
+		},
+		"jpg-7": {
+			FileName: "orientation_test_7.jpeg",
+			Expected: &model.PostImage{
+				Width:  2860,
+				Height: 1578,
+				Format: "jpeg",
+			},
+		},
+		"jpg-8": {
+			FileName: "orientation_test_8.jpeg",
+			Expected: &model.PostImage{
+				Width:  2860,
+				Height: 1578,
+				Format: "jpeg",
+			},
+		},
+		"jpg-9": {
+			FileName: "orientation_test_9.jpeg",
+			Expected: &model.PostImage{
+				Width:  4000,
+				Height: 2667,
+				Format: "jpeg",
 			},
 		},
 		"animated gif": {
@@ -2753,7 +2880,7 @@ func TestParseImages(t *testing.T) {
 			file, err := testutils.ReadTestFile(testCase.FileName)
 			require.NoError(t, err)
 
-			result, err := parseImages(bytes.NewReader(file))
+			result, err := parseImages(request.EmptyContext(mlog.CreateConsoleTestLogger(t)), "", bytes.NewReader(file))
 			if testCase.ExpectError {
 				assert.Error(t, err)
 			} else {
@@ -2765,6 +2892,7 @@ func TestParseImages(t *testing.T) {
 }
 
 func TestLooksLikeAPermalink(t *testing.T) {
+	mainHelper.Parallel(t)
 	const siteURLWithSubpath = "http://localhost:8065/foo"
 	const siteURLWithTrailingSlash = "http://test.com/"
 	const siteURL = "http://test.com"
@@ -2796,6 +2924,7 @@ func TestLooksLikeAPermalink(t *testing.T) {
 }
 
 func TestContainsPermalink(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 
@@ -2835,6 +2964,7 @@ func TestContainsPermalink(t *testing.T) {
 }
 
 func TestSanitizePostMetadataForUserAndChannel(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t).InitBasic()
 	defer th.TearDown()
 
@@ -2895,14 +3025,7 @@ func TestSanitizePostMetadataForUserAndChannel(t *testing.T) {
 		assert.Len(t, actual.Metadata.Embeds, 0)
 	})
 
-	t.Run("should not preview for archived channels", func(t *testing.T) {
-		experimentalViewArchivedChannels := *th.App.Config().TeamSettings.ExperimentalViewArchivedChannels
-		defer func() {
-			th.App.UpdateConfig(func(cfg *model.Config) {
-				cfg.TeamSettings.ExperimentalViewArchivedChannels = &experimentalViewArchivedChannels
-			})
-		}()
-
+	t.Run("channel previews always work for archived channels", func(t *testing.T) {
 		publicChannel, err := th.App.CreateChannel(th.Context, &model.Channel{
 			Name:      model.NewId(),
 			Type:      model.ChannelTypeOpen,
@@ -2942,23 +3065,13 @@ func TestSanitizePostMetadataForUserAndChannel(t *testing.T) {
 
 		previewedPost := model.NewPreviewPost(post, th.BasicTeam, publicChannel)
 
-		th.App.UpdateConfig(func(cfg *model.Config) {
-			*cfg.TeamSettings.ExperimentalViewArchivedChannels = true
-		})
-
 		actual := th.App.sanitizePostMetadataForUserAndChannel(th.Context, post, previewedPost, publicChannel, th.BasicUser.Id)
 		assert.NotNil(t, actual.Metadata.Embeds[0].Data)
-
-		th.App.UpdateConfig(func(cfg *model.Config) {
-			*cfg.TeamSettings.ExperimentalViewArchivedChannels = false
-		})
-
-		actual = th.App.sanitizePostMetadataForUserAndChannel(th.Context, post, previewedPost, publicChannel, th.BasicUser.Id)
-		assert.Len(t, actual.Metadata.Embeds, 0)
 	})
 }
 
 func TestSanitizePostMetaDataForAudit(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t).InitBasic()
 	defer th.TearDown()
 
@@ -2972,7 +3085,7 @@ func TestSanitizePostMetaDataForAudit(t *testing.T) {
 		UserId:    th.BasicUser.Id,
 		ChannelId: th.BasicChannel.Id,
 		Message:   "hello world",
-	}, th.BasicChannel, false, true)
+	}, th.BasicChannel, model.CreatePostFlags{SetOnline: true})
 	require.Nil(t, err)
 	referencedPost.Metadata.Embeds = nil
 
@@ -2982,7 +3095,7 @@ func TestSanitizePostMetaDataForAudit(t *testing.T) {
 		UserId:    th.BasicUser.Id,
 		ChannelId: th.BasicChannel.Id,
 		Message:   link,
-	}, th.BasicChannel, false, true)
+	}, th.BasicChannel, model.CreatePostFlags{SetOnline: true})
 	require.Nil(t, err)
 	previewPost.Metadata.Embeds = nil
 	clientPost := th.App.PreparePostForClientWithEmbedsAndImages(th.Context, previewPost, false, false, false)
@@ -3011,6 +3124,7 @@ func TestSanitizePostMetaDataForAudit(t *testing.T) {
 }
 
 func TestSanitizePostMetadataForUser(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t).InitBasic()
 	defer th.TearDown()
 
@@ -3121,33 +3235,114 @@ func TestSanitizePostMetadataForUser(t *testing.T) {
 			},
 		}
 
-		experimentalViewArchivedChannels := *th.App.Config().TeamSettings.ExperimentalViewArchivedChannels
-		defer func() {
-			th.App.UpdateConfig(func(cfg *model.Config) {
-				cfg.TeamSettings.ExperimentalViewArchivedChannels = &experimentalViewArchivedChannels
-			})
-		}()
-
-		th.App.UpdateConfig(func(cfg *model.Config) {
-			*cfg.TeamSettings.ExperimentalViewArchivedChannels = true
-		})
-
 		sanitizedPost, err := th.App.SanitizePostMetadataForUser(th.Context, post, th.BasicUser.Id)
 		require.Nil(t, err)
 		require.NotNil(t, sanitizedPost)
 
 		require.Equal(t, 2, len(sanitizedPost.Metadata.Embeds))
 		require.Equal(t, model.PostEmbedPermalink, sanitizedPost.Metadata.Embeds[0].Type)
+	})
+}
 
-		th.App.UpdateConfig(func(cfg *model.Config) {
-			*cfg.TeamSettings.ExperimentalViewArchivedChannels = false
-		})
+func TestGetLinkMetadataFromCache(t *testing.T) {
+	mainHelper.Parallel(t)
 
-		sanitizedPost, err = th.App.SanitizePostMetadataForUser(th.Context, post, th.BasicUser.Id)
-		require.Nil(t, err)
-		require.NotNil(t, sanitizedPost)
+	testURL := "https://example.com/test"
+	testTimestamp := int64(1640995200000) // 2022-01-01 00:00:00 UTC
 
-		require.Equal(t, 1, len(sanitizedPost.Metadata.Embeds))
-		require.Equal(t, model.PostEmbedLink, sanitizedPost.Metadata.Embeds[0].Type)
+	setup := func(t *testing.T) {
+		err := platform.PurgeLinkCache()
+		require.NoError(t, err)
+	}
+
+	assertCached := func(t *testing.T, url string, expectedOG *opengraph.OpenGraph, expectedImage *model.PostImage, expectedPermalink *model.Permalink) {
+		og, image, permalink, found := getLinkMetadataFromCache(url, testTimestamp)
+		assert.True(t, found)
+		assert.Equal(t, expectedOG, og)
+		assert.Equal(t, expectedImage, image)
+		assert.Equal(t, expectedPermalink, permalink)
+	}
+
+	assertNotCached := func(t *testing.T, url string) {
+		og, image, permalink, found := getLinkMetadataFromCache(url, testTimestamp)
+		assert.False(t, found)
+		assert.Nil(t, og)
+		assert.Nil(t, image)
+		assert.Nil(t, permalink)
+	}
+
+	t.Run("should return false when cache is empty", func(t *testing.T) {
+		setup(t)
+		assertNotCached(t, testURL)
+	})
+
+	t.Run("should return cached data when URL matches", func(t *testing.T) {
+		setup(t)
+		expectedOG := &opengraph.OpenGraph{
+			Title: "Test Title",
+			URL:   testURL,
+		}
+		expectedImage := &model.PostImage{
+			Width:  100,
+			Height: 200,
+		}
+		expectedPermalink := &model.Permalink{
+			PreviewPost: &model.PreviewPost{
+				PostID: "test-post-id",
+			},
+		}
+
+		ctx := request.TestContext(t)
+		cacheLinkMetadata(ctx, testURL, testTimestamp, expectedOG, expectedImage, expectedPermalink)
+
+		assertCached(t, testURL, expectedOG, expectedImage, expectedPermalink)
+	})
+
+	t.Run("should return false when different url not cached", func(t *testing.T) {
+		setup(t)
+
+		cachedURL := "https://example.com/cached"
+		requestedURL := "https://example.com/different"
+
+		expectedOG := &opengraph.OpenGraph{
+			Title: "Cached Title",
+			URL:   cachedURL,
+		}
+		ctx := request.TestContext(t)
+		cacheLinkMetadata(ctx, cachedURL, testTimestamp, expectedOG, nil, nil)
+
+		assertNotCached(t, requestedURL)
+	})
+
+	t.Run("should return false when different url not cached, even if hash collides with a cached url", func(t *testing.T) {
+		setup(t)
+
+		url1 := "http://test.com/w4xg6hpvomau9j5iz371"
+		url2 := "http://collision.comupio5zw28x1m36c"
+
+		hash1 := model.GenerateLinkMetadataHash(url1, testTimestamp)
+		hash2 := model.GenerateLinkMetadataHash(url2, testTimestamp)
+		assert.Equal(t, hash1, hash2, "URLs should have colliding hashes")
+
+		og1 := &opengraph.OpenGraph{
+			Title: "First URL Title",
+			URL:   url1,
+		}
+		ctx := request.TestContext(t)
+		cacheLinkMetadata(ctx, url1, testTimestamp, og1, nil, nil)
+
+		assertCached(t, url1, og1, nil, nil)
+		assertNotCached(t, url2)
+	})
+
+	t.Run("should handle cached nil values correctly", func(t *testing.T) {
+		setup(t)
+
+		nilURL := "https://example.com/nil-test"
+
+		ctx := request.TestContext(t)
+		cacheLinkMetadata(ctx, nilURL, testTimestamp, nil, nil, nil)
+
+		assertCached(t, nilURL, nil, nil, nil)
 	})
 }

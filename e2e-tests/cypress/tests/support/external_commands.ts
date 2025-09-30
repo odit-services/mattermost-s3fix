@@ -6,14 +6,15 @@ import type {Post} from '@mattermost/types/posts';
 import type {TeamMembership} from '@mattermost/types/teams';
 import type {UserProfile} from '@mattermost/types/users';
 
+import {getRandomId} from '../utils';
+
 import {getAdminAccount} from './env';
 
-import {getRandomId} from '../utils';
 
 function externalActivateUser(userId: string, active = true) {
     const admin = getAdminAccount();
 
-    cy.externalRequest({user: admin, method: 'PUT', path: `users/${userId}/active`, data: {active}});
+    return cy.externalRequest({user: admin, method: 'PUT', path: `users/${userId}/active`, data: {active}});
 }
 Cypress.Commands.add('externalActivateUser', externalActivateUser);
 

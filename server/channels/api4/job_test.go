@@ -16,6 +16,7 @@ import (
 )
 
 func TestCreateJob(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	th.LoginSystemManager()
 	defer th.TearDown()
@@ -36,7 +37,10 @@ func TestCreateJob(t *testing.T) {
 	t.Run("valid job as user with permissions", func(t *testing.T) {
 		received, _, err := th.SystemAdminClient.CreateJob(context.Background(), job)
 		require.NoError(t, err)
-		defer th.App.Srv().Store().Job().Delete(received.Id)
+		defer func() {
+			result, appErr := th.App.Srv().Store().Job().Delete(received.Id)
+			require.NoErrorf(t, appErr, "Failed to delete job (result: %v): %v", result, appErr)
+		}()
 	})
 
 	t.Run("invalid job type as user without permissions", func(t *testing.T) {
@@ -47,6 +51,7 @@ func TestCreateJob(t *testing.T) {
 }
 
 func TestGetJob(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 
@@ -58,7 +63,10 @@ func TestGetJob(t *testing.T) {
 	_, err := th.App.Srv().Store().Job().Save(job)
 	require.NoError(t, err)
 
-	defer th.App.Srv().Store().Job().Delete(job.Id)
+	defer func() {
+		result, appErr := th.App.Srv().Store().Job().Delete(job.Id)
+		require.NoError(t, appErr, "Failed to delete job (result: %v)", result)
+	}()
 
 	received, _, err := th.SystemAdminClient.GetJob(context.Background(), job.Id)
 	require.NoError(t, err)
@@ -80,6 +88,7 @@ func TestGetJob(t *testing.T) {
 }
 
 func TestGetJobs(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 
@@ -113,7 +122,11 @@ func TestGetJobs(t *testing.T) {
 	for _, job := range jobs {
 		_, err := th.App.Srv().Store().Job().Save(job)
 		require.NoError(t, err)
-		defer th.App.Srv().Store().Job().Delete(job.Id)
+
+		defer func(jobId string) {
+			result, appErr := th.App.Srv().Store().Job().Delete(jobId)
+			require.NoError(t, appErr, "Failed to delete job (result: %v)", result)
+		}(job.Id)
 	}
 
 	t.Run("Get 2 jobs", func(t *testing.T) {
@@ -160,6 +173,7 @@ func TestGetJobs(t *testing.T) {
 }
 
 func TestGetJobsByType(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	th.LoginSystemManager()
 	defer th.TearDown()
@@ -192,7 +206,11 @@ func TestGetJobsByType(t *testing.T) {
 	for _, job := range jobs {
 		_, err := th.App.Srv().Store().Job().Save(job)
 		require.NoError(t, err)
-		defer th.App.Srv().Store().Job().Delete(job.Id)
+
+		defer func(jobId string) {
+			result, appErr := th.App.Srv().Store().Job().Delete(jobId)
+			require.NoError(t, appErr, "Failed to delete job (result: %v)", result)
+		}(job.Id)
 	}
 
 	received, _, err := th.SystemAdminClient.GetJobsByType(context.Background(), jobType, 0, 2)
@@ -225,6 +243,7 @@ func TestGetJobsByType(t *testing.T) {
 }
 
 func TestDownloadJob(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t).InitBasic()
 	th.LoginSystemManager()
 	defer th.TearDown()
@@ -261,18 +280,25 @@ func TestDownloadJob(t *testing.T) {
 	// as a system admin, we should get a not found status.
 	_, err = th.App.Srv().Store().Job().Save(job)
 	require.NoError(t, err)
-	defer th.App.Srv().Store().Job().Delete(job.Id)
+	defer func() {
+		_, delErr := th.App.Srv().Store().Job().Delete(job.Id)
+		require.NoError(t, delErr, "Failed to delete job %s", job.Id)
+	}()
 
-	filePath := "./data/export/" + job.Id + "/testdat.txt"
-	mkdirAllErr := os.MkdirAll(filepath.Dir(filePath), 0770)
-	require.NoError(t, mkdirAllErr)
-	os.Create(filePath)
+	filePath := filepath.Join(*th.App.Config().FileSettings.Directory, "export/"+job.Id+"/testdat.txt")
+	err = os.MkdirAll(filepath.Dir(filePath), 0770)
+	require.NoError(t, err)
+
+	_, createErr := os.Create(filePath)
+	require.NoError(t, createErr)
 
 	// Normal user cannot download the results of these job (not the right permission)
 	_, resp, err = th.Client.DownloadJob(context.Background(), job.Id)
 	require.Error(t, err)
 	CheckForbiddenStatus(t, resp)
-	th.SystemManagerClient.DownloadJob(context.Background(), job.Id)
+	_, resp, err = th.SystemManagerClient.DownloadJob(context.Background(), job.Id)
+	require.Error(t, err)
+	CheckForbiddenStatus(t, resp)
 	// System manager with default permissions cannot download the results of these job (Doesn't have correct permissions)
 	_, resp, err = th.SystemManagerClient.DownloadJob(context.Background(), job.Id)
 	require.Error(t, err)
@@ -293,10 +319,12 @@ func TestDownloadJob(t *testing.T) {
 
 	// Now we stub the results of the job into the same directory and try to download it again
 	// This time we should successfully retrieve the results without any error
-	filePath = "./data/export/" + job.Id + ".zip"
-	mkdirAllErr = os.MkdirAll(filepath.Dir(filePath), 0770)
-	require.NoError(t, mkdirAllErr)
-	os.Create(filePath)
+	filePath = filepath.Join(*th.App.Config().FileSettings.Directory, "export/"+job.Id+".zip")
+	err = os.MkdirAll(filepath.Dir(filePath), 0770)
+	require.NoError(t, err)
+
+	_, createErr = os.Create(filePath)
+	require.NoError(t, createErr)
 
 	_, _, err = th.SystemAdminClient.DownloadJob(context.Background(), job.Id)
 	require.NoError(t, err)
@@ -313,15 +341,43 @@ func TestDownloadJob(t *testing.T) {
 	}
 	_, err = th.App.Srv().Store().Job().Save(job)
 	require.NoError(t, err)
-	defer th.App.Srv().Store().Job().Delete(job.Id)
+	defer func() {
+		_, delErr := th.App.Srv().Store().Job().Delete(job.Id)
+		require.NoError(t, delErr, "Failed to delete job %s", job.Id)
+	}()
 
 	// System admin shouldn't be able to download since the job type is not message export
 	_, resp, err = th.SystemAdminClient.DownloadJob(context.Background(), job.Id)
 	require.Error(t, err)
 	CheckBadRequestStatus(t, resp)
+
+	// Test the case where export_dir is not valid
+	jobName = model.NewId()
+	job = &model.Job{
+		Id:   jobName,
+		Type: model.JobTypeMessageExport,
+		Data: map[string]string{
+			"export_type":     "csv",
+			"is_downloadable": "true",
+			"export_dir":      "/bad/absolute/path",
+		},
+		Status: model.JobStatusSuccess,
+	}
+	_, err = th.App.Srv().Store().Job().Save(job)
+	require.NoError(t, err)
+	defer func() {
+		_, delErr := th.App.Srv().Store().Job().Delete(job.Id)
+		require.NoError(t, delErr, "Failed to delete job %s", job.Id)
+	}()
+
+	_, resp, err = th.SystemAdminClient.DownloadJob(context.Background(), job.Id)
+	require.Error(t, err)
+	require.EqualError(t, err, "Unable to download this job")
+	CheckNotFoundStatus(t, resp)
 }
 
 func TestCancelJob(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 
@@ -347,9 +403,11 @@ func TestCancelJob(t *testing.T) {
 	for _, job := range jobs {
 		_, err := th.App.Srv().Store().Job().Save(job)
 		require.NoError(t, err)
-		defer th.App.Srv().Store().Job().Delete(job.Id)
+		defer func(jobId string) {
+			_, delErr := th.App.Srv().Store().Job().Delete(jobId)
+			require.NoError(t, delErr, "Failed to delete job %s", jobId)
+		}(job.Id)
 	}
-
 	resp, err := th.Client.CancelJob(context.Background(), jobs[0].Id)
 	require.Error(t, err)
 	CheckForbiddenStatus(t, resp)
@@ -370,6 +428,7 @@ func TestCancelJob(t *testing.T) {
 }
 
 func TestUpdateJobStatus(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 
@@ -400,7 +459,10 @@ func TestUpdateJobStatus(t *testing.T) {
 	for _, job := range jobs {
 		_, err := th.App.Srv().Store().Job().Save(job)
 		require.NoError(t, err)
-		defer th.App.Srv().Store().Job().Delete(job.Id)
+		defer func(jobID string) {
+			_, delErr := th.App.Srv().Store().Job().Delete(jobID)
+			require.NoError(t, delErr, "Failed to delete job %s", jobID)
+		}(job.Id)
 	}
 
 	t.Run("Fail to update job status without permission", func(t *testing.T) {

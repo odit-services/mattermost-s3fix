@@ -10,12 +10,12 @@ import type {UserThread} from '@mattermost/types/threads';
 import {threadIsSynthetic} from '@mattermost/types/threads';
 
 import {setThreadFollow, getThread as fetchThread} from 'mattermost-redux/actions/threads';
+import {Posts} from 'mattermost-redux/constants';
 import {getPost} from 'mattermost-redux/selectors/entities/posts';
 import {getCurrentTeamId} from 'mattermost-redux/selectors/entities/teams';
 import {makeGetThreadOrSynthetic} from 'mattermost-redux/selectors/entities/threads';
 import {getCurrentUserId} from 'mattermost-redux/selectors/entities/users';
 
-import {trackEvent} from 'actions/telemetry_actions';
 import {selectPost} from 'actions/views/rhs';
 
 import Button from 'components/threading/common/button';
@@ -69,7 +69,6 @@ function ThreadFooter({
             return;
         }
 
-        trackEvent('crt', 'replied_using_footer');
         e.stopPropagation();
         dispatch(selectPost({id: threadId, channel_id: channelId} as Post));
     }, [replyClick, threadId, channelId]);
@@ -79,14 +78,16 @@ function ThreadFooter({
         dispatch(setThreadFollow(currentUserId, currentTeamId, threadId, !isFollowing));
     }, [isFollowing]);
 
+    if (post.delete_at > 0 || post.state === Posts.POST_DELETED) {
+        return null;
+    }
+
     return (
         <div className='ThreadFooter'>
             {!isFollowing || threadIsSynthetic(thread) || !thread.unread_replies ? (
                 <div className='indicator'/>
             ) : (
                 <WithTooltip
-                    id='threadFooterIndicator'
-                    placement='top'
                     title={
                         <FormattedMessage
                             id='threading.numNewMessages'

@@ -1,8 +1,6 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import type {AnyAction} from 'redux';
-
 import type {
     OpenGraphMetadata,
     Post,
@@ -21,9 +19,9 @@ import type {
     RelationOneToMany,
 } from '@mattermost/types/utilities';
 
-import {ChannelTypes, PostTypes, UserTypes, ThreadTypes, CloudTypes} from 'mattermost-redux/action_types';
+import type {MMReduxAction} from 'mattermost-redux/action_types';
+import {ChannelTypes, PostTypes, UserTypes, ThreadTypes, CloudTypes, LimitsTypes} from 'mattermost-redux/action_types';
 import {Posts} from 'mattermost-redux/constants';
-import {PostTypes as PostConstant} from 'mattermost-redux/constants/posts';
 import {comparePosts, isPermalink, shouldUpdatePost} from 'mattermost-redux/utils/post_utils';
 
 export function removeUnneededMetadata(post: Post) {
@@ -99,7 +97,7 @@ export function removeUnneededMetadata(post: Post) {
     };
 }
 
-export function nextPostsReplies(state: {[x in Post['id']]: number} = {}, action: AnyAction) {
+export function nextPostsReplies(state: {[x in Post['id']]: number} = {}, action: MMReduxAction) {
     switch (action.type) {
     case PostTypes.RECEIVED_POST:
     case PostTypes.RECEIVED_NEW_POST: {
@@ -158,7 +156,7 @@ export function nextPostsReplies(state: {[x in Post['id']]: number} = {}, action
     }
 }
 
-export function handlePosts(state: IDMappedObjects<Post> = {}, action: AnyAction) {
+export function handlePosts(state: IDMappedObjects<Post> = {}, action: MMReduxAction) {
     switch (action.type) {
     case PostTypes.RECEIVED_POST:
     case PostTypes.RECEIVED_NEW_POST: {
@@ -194,6 +192,7 @@ export function handlePosts(state: IDMappedObjects<Post> = {}, action: AnyAction
             [post.id]: {
                 ...state[post.id],
                 state: Posts.POST_DELETED,
+                message: '',
                 file_ids: [],
                 has_reactions: false,
             },
@@ -280,19 +279,12 @@ export function handlePosts(state: IDMappedObjects<Post> = {}, action: AnyAction
         };
     }
 
-    case ChannelTypes.RECEIVED_CHANNEL_DELETED:
-    case ChannelTypes.DELETE_CHANNEL_SUCCESS:
     case ChannelTypes.LEAVE_CHANNEL: {
-        if (action.data && action.data.viewArchivedChannels) {
-            // Nothing to do since we still want to store posts in archived channels
-            return state;
-        }
-
         const channelId = action.data.id;
 
         let postDeleted = false;
 
-        // Remove any posts in the deleted channel
+        // Remove any posts from the channel left by the user
         const nextState = {...state};
         for (const post of Object.values(state)) {
             if (post.channel_id === channelId) {
@@ -398,7 +390,7 @@ function handlePostReceived(nextState: any, post: Post, nestedPermalinkLevel?: n
     return currentState;
 }
 
-export function handlePendingPosts(state: string[] = [], action: AnyAction) {
+export function handlePendingPosts(state: string[] = [], action: MMReduxAction) {
     switch (action.type) {
     case PostTypes.RECEIVED_NEW_POST: {
         const post = action.data;
@@ -464,7 +456,7 @@ export function handlePendingPosts(state: string[] = [], action: AnyAction) {
     }
 }
 
-export function postsInChannel(state: Record<string, PostOrderBlock[]> = {}, action: AnyAction, prevPosts: IDMappedObjects<Post>, nextPosts: Record<string, Post>) {
+export function postsInChannel(state: Record<string, PostOrderBlock[]> = {}, action: MMReduxAction, prevPosts: IDMappedObjects<Post>, nextPosts: Record<string, Post>) {
     switch (action.type) {
     case PostTypes.RESET_POSTS_IN_CHANNEL: {
         return {};
@@ -472,7 +464,7 @@ export function postsInChannel(state: Record<string, PostOrderBlock[]> = {}, act
     case PostTypes.RECEIVED_NEW_POST: {
         const post = action.data as Post;
 
-        if (action.features?.crtEnabled && post.root_id && post.type !== PostConstant.EPHEMERAL) {
+        if (action.features?.crtEnabled && post.root_id) {
             return state;
         }
 
@@ -605,8 +597,8 @@ export function postsInChannel(state: Record<string, PostOrderBlock[]> = {}, act
                 const recentBlock = postsForChannel[recentBlockIndex];
 
                 if (recentBlock.order.length === order.length &&
-                    recentBlock.order[0] === order[0] &&
-                    recentBlock.order[recentBlock.order.length - 1] === order[order.length - 1]) {
+                        recentBlock.order[0] === order[0] &&
+                        recentBlock.order[recentBlock.order.length - 1] === order[order.length - 1]) {
                     // The newly received posts are identical to the most recent block, so there's nothing to do
                     return state;
                 }
@@ -840,14 +832,7 @@ export function postsInChannel(state: Record<string, PostOrderBlock[]> = {}, act
         };
     }
 
-    case ChannelTypes.RECEIVED_CHANNEL_DELETED:
-    case ChannelTypes.DELETE_CHANNEL_SUCCESS:
     case ChannelTypes.LEAVE_CHANNEL: {
-        if (action.data && action.data.viewArchivedChannels) {
-            // Nothing to do since we still want to store posts in archived channels
-            return state;
-        }
-
         const channelId = action.data.id;
 
         if (!state[channelId]) {
@@ -954,7 +939,7 @@ export function mergePostOrder(left: string[], right: string[], posts: Record<st
     return result;
 }
 
-export function postsInThread(state: RelationOneToMany<Post, Post> = {}, action: AnyAction, prevPosts: Record<string, Post>) {
+export function postsInThread(state: RelationOneToMany<Post, Post> = {}, action: MMReduxAction, prevPosts: Record<string, Post>) {
     switch (action.type) {
     case PostTypes.RECEIVED_NEW_POST:
     case PostTypes.RECEIVED_POST: {
@@ -1117,14 +1102,7 @@ export function postsInThread(state: RelationOneToMany<Post, Post> = {}, action:
         return nextState;
     }
 
-    case ChannelTypes.RECEIVED_CHANNEL_DELETED:
-    case ChannelTypes.DELETE_CHANNEL_SUCCESS:
     case ChannelTypes.LEAVE_CHANNEL: {
-        if (action.data && action.data.viewArchivedChannels) {
-            // Nothing to do since we still want to store posts in archived channels
-            return state;
-        }
-
         const channelId = action.data.id;
 
         let postDeleted = false;
@@ -1153,7 +1131,7 @@ export function postsInThread(state: RelationOneToMany<Post, Post> = {}, action:
     }
 }
 
-export function postEditHistory(state: Post[] = [], action: AnyAction) {
+export function postEditHistory(state: Post[] = [], action: MMReduxAction) {
     switch (action.type) {
     case PostTypes.RECEIVED_POST_HISTORY:
         return action.data;
@@ -1164,7 +1142,7 @@ export function postEditHistory(state: Post[] = [], action: AnyAction) {
     }
 }
 
-function currentFocusedPostId(state = '', action: AnyAction) {
+function currentFocusedPostId(state = '', action: MMReduxAction) {
     switch (action.type) {
     case PostTypes.RECEIVED_FOCUSED_POST:
         return action.data;
@@ -1175,7 +1153,7 @@ function currentFocusedPostId(state = '', action: AnyAction) {
     }
 }
 
-export function reactions(state: RelationOneToOne<Post, Record<string, Reaction>> = {}, action: AnyAction) {
+export function reactions(state: RelationOneToOne<Post, Record<string, Reaction>> = {}, action: MMReduxAction) {
     switch (action.type) {
     case PostTypes.RECEIVED_REACTION: {
         const reaction = action.data as Reaction;
@@ -1236,7 +1214,7 @@ export function reactions(state: RelationOneToOne<Post, Record<string, Reaction>
     }
 }
 
-export function acknowledgements(state: RelationOneToOne<Post, Record<UserProfile['id'], number>> = {}, action: AnyAction) {
+export function acknowledgements(state: RelationOneToOne<Post, Record<UserProfile['id'], number>> = {}, action: MMReduxAction) {
     switch (action.type) {
     case PostTypes.CREATE_ACK_POST_SUCCESS: {
         const ack = action.data as PostAcknowledgement;
@@ -1348,7 +1326,7 @@ function storeAcknowledgementsForPost(state: any, post: Post) {
     };
 }
 
-export function openGraph(state: RelationOneToOne<Post, Record<string, OpenGraphMetadata>> = {}, action: AnyAction) {
+export function openGraph(state: RelationOneToOne<Post, Record<string, OpenGraphMetadata>> = {}, action: MMReduxAction) {
     switch (action.type) {
     case PostTypes.RECEIVED_NEW_POST:
     case PostTypes.RECEIVED_POST: {
@@ -1412,7 +1390,7 @@ function messagesHistory(state: Partial<MessageHistory> = {
         post: -1,
         comment: -1,
     },
-}, action: AnyAction) {
+}, action: MMReduxAction) {
     switch (action.type) {
     case PostTypes.ADD_MESSAGE_INTO_HISTORY: {
         const nextIndex: Record<string, number> = {};
@@ -1494,7 +1472,7 @@ export const zeroStateLimitedViews = {
 
 export function limitedViews(
     state: PostsState['limitedViews'] = zeroStateLimitedViews,
-    action: AnyAction,
+    action: MMReduxAction,
 ): PostsState['limitedViews'] {
     switch (action.type) {
     case PostTypes.RECEIVED_POSTS:
@@ -1535,14 +1513,17 @@ export function limitedViews(
         }
         return state;
     }
-    case ChannelTypes.RECEIVED_CHANNEL_DELETED:
-    case ChannelTypes.DELETE_CHANNEL_SUCCESS:
-    case ChannelTypes.LEAVE_CHANNEL: {
-        if (action.data && action.data.viewArchivedChannels) {
-            // Nothing to do since we still want to store posts in archived channels
-            return state;
-        }
+    case LimitsTypes.RECEIVED_APP_LIMITS: {
+        const serverLimits = action.data;
 
+        // If server limits change and there is no post history limit any more (e.g. upgrade to unlimited plan),
+        // this state is stale and should be dumped.
+        if (!serverLimits?.postHistoryLimit || serverLimits.postHistoryLimit <= 0) {
+            return zeroStateLimitedViews;
+        }
+        return state;
+    }
+    case ChannelTypes.LEAVE_CHANNEL: {
         const channelId = action.data.id;
         if (!state.channels[channelId]) {
             return state;
@@ -1560,7 +1541,7 @@ export function limitedViews(
     }
 }
 
-export default function reducer(state: Partial<PostsState> = {}, action: AnyAction) {
+export default function reducer(state: Partial<PostsState> = {}, action: MMReduxAction) {
     const nextPosts = handlePosts(state.posts, action);
     const nextPostsInChannel = postsInChannel(state.postsInChannel, action, state.posts!, nextPosts);
 

@@ -19,6 +19,7 @@ const (
 )
 
 func TestCache(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 
@@ -34,11 +35,13 @@ func TestCache(t *testing.T) {
 		UserId: model.NewId(),
 	}
 
-	th.Service.sessionCache.SetWithExpiry(session.Token, session, 5*time.Minute)
-	th.Service.sessionCache.SetWithExpiry(session2.Token, session2, 5*time.Minute)
+	err := th.Service.sessionCache.SetWithExpiry(session.Token, session, 5*time.Minute)
+	require.NoError(t, err)
+	err = th.Service.sessionCache.SetWithExpiry(session2.Token, session2, 5*time.Minute)
+	require.NoError(t, err)
 
 	var keys []string
-	err := th.Service.sessionCache.Scan(func(in []string) error {
+	err = th.Service.sessionCache.Scan(func(in []string) error {
 		keys = append(keys, in...)
 		return nil
 	})
@@ -58,8 +61,8 @@ func TestCache(t *testing.T) {
 	clear(rkeys)
 	rkeys = []string{}
 
-	th.Service.ClearAllUsersSessionCache()
-
+	err = th.Service.ClearAllUsersSessionCache()
+	require.NoError(t, err)
 	err = th.Service.sessionCache.Scan(func(in []string) error {
 		rkeys = append(rkeys, in...)
 		return nil
@@ -69,6 +72,7 @@ func TestCache(t *testing.T) {
 }
 
 func TestSetSessionExpireInHours(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 
@@ -115,6 +119,7 @@ func TestSetSessionExpireInHours(t *testing.T) {
 }
 
 func TestOAuthRevokeAccessToken(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 
@@ -147,6 +152,7 @@ func TestOAuthRevokeAccessToken(t *testing.T) {
 }
 
 func TestUpdateSessionsIsGuest(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t)
 	defer th.TearDown()
 

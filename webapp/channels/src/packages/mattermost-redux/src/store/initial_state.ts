@@ -13,6 +13,8 @@ const state: GlobalState = {
             serverVersion: '',
             firstAdminVisitMarketplaceStatus: false,
             firstAdminCompleteSetup: false,
+            customProfileAttributes: {},
+            cwsAvailability: 'pending',
         },
         users: {
             currentUserId: '',
@@ -48,6 +50,7 @@ const state: GlobalState = {
             stats: {},
             groupsAssociatedToTeam: {},
             totalCount: 0,
+            contentFlaggingStatus: {},
         },
         channels: {
             currentChannelId: '',
@@ -118,6 +121,8 @@ const state: GlobalState = {
             dataRetentionCustomPolicies: {},
             dataRetentionCustomPoliciesCount: 0,
             prevTrialLicense: {},
+            accessControlPolicies: {},
+            channelsForAccessControlPolicy: {},
         },
         jobs: {
             jobs: {},
@@ -132,6 +137,7 @@ const state: GlobalState = {
             commands: {},
             appsBotIDs: [],
             appsOAuthAppIDs: [],
+            dialogTriggerId: '',
             outgoingOAuthConnections: {},
         },
         files: {
@@ -211,6 +217,13 @@ const state: GlobalState = {
                 teamsLoaded: false,
             },
         },
+        scheduledPosts: {
+            byId: {},
+            byTeamId: {},
+            errorsByTeamId: {},
+            byChannelOrThreadId: {},
+        },
+        contentFlagging: {},
     },
     errors: [],
     requests: {
@@ -312,6 +325,7 @@ const state: GlobalState = {
         lastConnectAt: 0,
         lastDisconnectAt: 0,
         connectionId: '',
+        serverHostname: '',
     },
 };
 export default state;

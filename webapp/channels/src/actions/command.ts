@@ -16,7 +16,6 @@ import {isMarketplaceEnabled} from 'mattermost-redux/selectors/entities/general'
 import {haveICurrentTeamPermission} from 'mattermost-redux/selectors/entities/roles';
 import {getCurrentRelativeTeamUrl, getCurrentTeamId} from 'mattermost-redux/selectors/entities/teams';
 import {getCurrentUserId} from 'mattermost-redux/selectors/entities/users';
-import type {ActionFuncAsync} from 'mattermost-redux/types/actions';
 
 import * as GlobalActions from 'actions/global_actions';
 import * as PostActions from 'actions/post_actions';
@@ -35,10 +34,9 @@ import {isUrlSafe, getSiteURL} from 'utils/url';
 import * as UserAgent from 'utils/user_agent';
 import {localizeMessage, getUserIdFromChannelName} from 'utils/utils';
 
-import type {GlobalState} from 'types/store';
+import type {ActionFuncAsync} from 'types/store';
 
 import {doAppSubmit, openAppsModal, postEphemeralCallResponseForCommandArgs} from './apps';
-import {trackEvent} from './telemetry_actions';
 
 export type ExecuteCommandReturnType = {
     frontendHandled?: boolean;
@@ -47,9 +45,9 @@ export type ExecuteCommandReturnType = {
     appResponse?: AppCallResponse;
 }
 
-export function executeCommand(message: string, args: CommandArgs): ActionFuncAsync<ExecuteCommandReturnType, GlobalState> {
+export function executeCommand(message: string, args: CommandArgs): ActionFuncAsync<ExecuteCommandReturnType> {
     return async (dispatch, getState) => {
-        const state = getState() as GlobalState;
+        const state = getState();
 
         let msg = message;
 
@@ -59,18 +57,6 @@ export function executeCommand(message: string, args: CommandArgs): ActionFuncAs
         }
         const cmd = msg.substring(0, cmdLength).toLowerCase();
         msg = cmd + ' ' + msg.substring(cmdLength, msg.length).trim();
-
-        // Add track event for certain slash commands
-        const commandsWithTelemetry = [
-            {command: '/help', telemetry: 'slash-command-help'},
-            {command: '/marketplace', telemetry: 'slash-command-marketplace'},
-        ];
-        for (const command of commandsWithTelemetry) {
-            if (msg.startsWith(command.command)) {
-                trackEvent('slash-commands', command.telemetry);
-                break;
-            }
-        }
 
         switch (cmd) {
         case '/search':
@@ -140,7 +126,7 @@ export function executeCommand(message: string, args: CommandArgs): ActionFuncAs
                 return {error: {message: localizeMessage({id: 'marketplace_command.disabled', defaultMessage: 'The marketplace is disabled. Please contact your System Administrator for details.'})}};
             }
 
-            dispatch(openModal({modalId: ModalIdentifiers.PLUGIN_MARKETPLACE, dialogType: MarketplaceModal, dialogProps: {openedFrom: 'command'}}));
+            dispatch(openModal({modalId: ModalIdentifiers.PLUGIN_MARKETPLACE, dialogType: MarketplaceModal}));
             return {data: {frontendHandled: true}};
         case '/collapse':
         case '/expand':
@@ -149,7 +135,7 @@ export function executeCommand(message: string, args: CommandArgs): ActionFuncAs
         }
 
         if (appsEnabled(state)) {
-            const getGlobalState = () => getState() as GlobalState;
+            const getGlobalState = () => getState();
             const createErrorMessage = (errMessage: string) => {
                 return {error: {message: errMessage}};
             };
@@ -221,6 +207,10 @@ export function executeCommand(message: string, args: CommandArgs): ActionFuncAs
         }
 
         if (data.trigger_id) {
+            const dialogArguments = {
+                channel_id: args.channel_id,
+            };
+            dispatch({type: IntegrationTypes.RECEIVED_DIALOG_ARGUMENTS, data: dialogArguments});
             dispatch({type: IntegrationTypes.RECEIVED_DIALOG_TRIGGER_ID, data: data.trigger_id});
         }
 

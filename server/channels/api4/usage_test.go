@@ -15,11 +15,13 @@ import (
 )
 
 func TestGetPostsUsage(t *testing.T) {
+	mainHelper.Parallel(t)
 	t.Run("unauthenticated users can not access", func(t *testing.T) {
 		th := Setup(t)
 		defer th.TearDown()
 
-		th.Client.Logout(context.Background())
+		_, err := th.Client.Logout(context.Background())
+		require.NoError(t, err)
 
 		usage, r, err := th.Client.GetPostsUsage(context.Background())
 		assert.Error(t, err)
@@ -31,7 +33,7 @@ func TestGetPostsUsage(t *testing.T) {
 		th := Setup(t).InitBasic()
 		defer th.TearDown()
 
-		for i := 0; i < 14; i++ {
+		for range 14 {
 			th.CreatePost()
 		}
 
@@ -53,11 +55,13 @@ func TestGetPostsUsage(t *testing.T) {
 }
 
 func TestGetStorageUsage(t *testing.T) {
+	mainHelper.Parallel(t)
 	t.Run("unauthenticated users cannot access", func(t *testing.T) {
 		th := Setup(t)
 		defer th.TearDown()
 
-		th.Client.Logout(context.Background())
+		_, err := th.Client.Logout(context.Background())
+		require.NoError(t, err)
 
 		usage, r, err := th.Client.GetStorageUsage(context.Background())
 		assert.Error(t, err)
@@ -67,11 +71,13 @@ func TestGetStorageUsage(t *testing.T) {
 }
 
 func TestGetTeamsUsage(t *testing.T) {
+	mainHelper.Parallel(t)
 	t.Run("unauthenticated users can not access", func(t *testing.T) {
 		th := Setup(t)
 		defer th.TearDown()
 
-		th.Client.Logout(context.Background())
+		_, err := th.Client.Logout(context.Background())
+		require.NoError(t, err)
 
 		usage, r, err := th.Client.GetTeamsUsage(context.Background())
 		assert.Error(t, err)

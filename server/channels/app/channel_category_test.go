@@ -13,13 +13,20 @@ import (
 )
 
 func TestSidebarCategory(t *testing.T) {
+	mainHelper.Parallel(t)
 	th := Setup(t).InitBasic()
 	defer th.TearDown()
 
 	basicChannel2 := th.CreateChannel(th.Context, th.BasicTeam)
-	defer th.App.PermanentDeleteChannel(th.Context, basicChannel2)
+	defer func() {
+		err := th.App.PermanentDeleteChannel(th.Context, basicChannel2)
+		require.Nil(t, err)
+	}()
 	user := th.CreateUser()
-	defer th.App.Srv().Store().User().PermanentDelete(th.Context, user.Id)
+	defer func() {
+		err := th.App.Srv().Store().User().PermanentDelete(th.Context, user.Id)
+		require.NoError(t, err)
+	}()
 	th.LinkUserToTeam(user, th.BasicTeam)
 	th.AddUserToChannel(user, basicChannel2)
 
@@ -80,6 +87,7 @@ func TestSidebarCategory(t *testing.T) {
 }
 
 func TestGetSidebarCategories(t *testing.T) {
+	mainHelper.Parallel(t)
 	t.Run("should return the sidebar categories for the given user/team", func(t *testing.T) {
 		th := Setup(t).InitBasic()
 		defer th.TearDown()
@@ -122,11 +130,10 @@ func TestGetSidebarCategories(t *testing.T) {
 		defer th.TearDown()
 
 		// Temporarily renaming a table to force a DB error.
-		sqlStore := mainHelper.GetSQLStore()
-		_, err := sqlStore.GetMasterX().Exec("ALTER TABLE SidebarCategories RENAME TO SidebarCategoriesTest")
+		_, err := th.SQLStore.GetMaster().Exec("ALTER TABLE SidebarCategories RENAME TO SidebarCategoriesTest")
 		require.NoError(t, err)
 		defer func() {
-			_, err := sqlStore.GetMasterX().Exec("ALTER TABLE SidebarCategoriesTest RENAME TO SidebarCategories")
+			_, err := th.SQLStore.GetMaster().Exec("ALTER TABLE SidebarCategoriesTest RENAME TO SidebarCategories")
 			require.NoError(t, err)
 		}()
 
@@ -138,6 +145,7 @@ func TestGetSidebarCategories(t *testing.T) {
 }
 
 func TestUpdateSidebarCategories(t *testing.T) {
+	mainHelper.Parallel(t)
 	t.Run("should mute and unmute all channels in a category when it is muted or unmuted", func(t *testing.T) {
 		th := Setup(t).InitBasic()
 		defer th.TearDown()
@@ -481,6 +489,7 @@ func TestUpdateSidebarCategories(t *testing.T) {
 }
 
 func TestDiffChannelsBetweenCategories(t *testing.T) {
+	mainHelper.Parallel(t)
 	t.Run("should return nothing when the categories contain identical channels", func(t *testing.T) {
 		originalCategories := []*model.SidebarCategoryWithChannels{
 			{

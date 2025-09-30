@@ -11,6 +11,7 @@ import (
 
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/shared/mlog"
+	"github.com/mattermost/mattermost/server/public/shared/request"
 	"github.com/mattermost/mattermost/server/v8/channels/store"
 	"github.com/mattermost/mattermost/server/v8/channels/store/sqlstore"
 	"github.com/mattermost/mattermost/server/v8/platform/services/cache"
@@ -160,9 +161,9 @@ func (s *LocalCacheUserStore) GetAllProfilesInChannel(ctx context.Context, chann
 	return userMap, nil
 }
 
-func (s *LocalCacheUserStore) GetProfileByIds(ctx context.Context, userIds []string, options *store.UserGetByIdsOpts, allowFromCache bool) ([]*model.User, error) {
+func (s *LocalCacheUserStore) GetProfileByIds(rctx request.CTX, userIds []string, options *store.UserGetByIdsOpts, allowFromCache bool) ([]*model.User, error) {
 	if !allowFromCache {
-		return s.UserStore.GetProfileByIds(ctx, userIds, options, false)
+		return s.UserStore.GetProfileByIds(rctx, userIds, options, false)
 	}
 
 	if options == nil {
@@ -173,7 +174,7 @@ func (s *LocalCacheUserStore) GetProfileByIds(ctx context.Context, userIds []str
 	remainingUserIds := make([]string, 0)
 
 	fromMaster := false
-	toPass := allocateCacheTargets[*model.User](len(userIds))
+	toPass := allocateCacheTargets[model.User](len(userIds))
 	errs := s.rootStore.doMultiReadCache(s.rootStore.userProfileByIdsCache, userIds, toPass)
 	for i, err := range errs {
 		if err != nil {
@@ -190,7 +191,7 @@ func (s *LocalCacheUserStore) GetProfileByIds(ctx context.Context, userIds []str
 			s.userProfileByIdsMut.Unlock()
 			remainingUserIds = append(remainingUserIds, userIds[i])
 		} else {
-			gotUser := *(toPass[i].(**model.User))
+			gotUser := toPass[i].(*model.User)
 			if (gotUser != nil) && (options.Since == 0 || gotUser.UpdateAt > options.Since) {
 				users = append(users, gotUser)
 			} else if gotUser == nil {
@@ -201,9 +202,9 @@ func (s *LocalCacheUserStore) GetProfileByIds(ctx context.Context, userIds []str
 
 	if len(remainingUserIds) > 0 {
 		if fromMaster {
-			ctx = sqlstore.WithMaster(ctx)
+			rctx = sqlstore.RequestContextWithMaster(rctx)
 		}
-		remainingUsers, err := s.UserStore.GetProfileByIds(ctx, remainingUserIds, options, false)
+		remainingUsers, err := s.UserStore.GetProfileByIds(rctx, remainingUserIds, options, false)
 		if err != nil {
 			return nil, err
 		}
@@ -216,14 +217,19 @@ func (s *LocalCacheUserStore) GetProfileByIds(ctx context.Context, userIds []str
 	return users, nil
 }
 
+func (s *LocalCacheUserStore) UpdateFailedPasswordAttempts(userID string, attempts int) error {
+	s.InvalidateProfileCacheForUser(userID)
+	return s.UserStore.UpdateFailedPasswordAttempts(userID, attempts)
+}
+
 // Get is a cache wrapper around the SqlStore method to get a user profile by id.
 // It checks if the user entry is present in the cache, returning the entry from cache
 // if it is present. Otherwise, it fetches the entry from the store and stores it in the
 // cache.
 func (s *LocalCacheUserStore) Get(ctx context.Context, id string) (*model.User, error) {
-	var cacheItem *model.User
+	var cacheItem model.User
 	if err := s.rootStore.doStandardReadCache(s.rootStore.userProfileByIdsCache, id, &cacheItem); err == nil {
-		return cacheItem, nil
+		return &cacheItem, nil
 	}
 
 	// If it was invalidated, then we need to query master.
@@ -247,7 +253,7 @@ func (s *LocalCacheUserStore) Get(ctx context.Context, id string) (*model.User, 
 // It checks if the user entries are present in the cache, returning the entries from cache
 // if it is present. Otherwise, it fetches the entries from the store and stores it in the
 // cache.
-func (s *LocalCacheUserStore) GetMany(ctx context.Context, ids []string) ([]*model.User, error) {
+func (s *LocalCacheUserStore) GetMany(rctx request.CTX, ids []string) ([]*model.User, error) {
 	// we are doing a loop instead of caching the full set in the cache because the number of permutations that we can have
 	// in this func is making caching of the total set not beneficial.
 	var cachedUsers []*model.User
@@ -255,7 +261,7 @@ func (s *LocalCacheUserStore) GetMany(ctx context.Context, ids []string) ([]*mod
 	uniqIDs := dedup(ids)
 
 	fromMaster := false
-	toPass := allocateCacheTargets[*model.User](len(uniqIDs))
+	toPass := allocateCacheTargets[model.User](len(uniqIDs))
 	errs := s.rootStore.doMultiReadCache(s.rootStore.userProfileByIdsCache, uniqIDs, toPass)
 	for i, err := range errs {
 		if err != nil {
@@ -272,7 +278,7 @@ func (s *LocalCacheUserStore) GetMany(ctx context.Context, ids []string) ([]*mod
 			s.userProfileByIdsMut.Unlock()
 			notCachedUserIds = append(notCachedUserIds, uniqIDs[i])
 		} else {
-			gotUser := *(toPass[i].(**model.User))
+			gotUser := toPass[i].(*model.User)
 			if gotUser != nil {
 				cachedUsers = append(cachedUsers, gotUser)
 			} else {
@@ -283,9 +289,9 @@ func (s *LocalCacheUserStore) GetMany(ctx context.Context, ids []string) ([]*mod
 
 	if len(notCachedUserIds) > 0 {
 		if fromMaster {
-			ctx = sqlstore.WithMaster(ctx)
+			rctx = sqlstore.RequestContextWithMaster(rctx)
 		}
-		dbUsers, err := s.UserStore.GetMany(ctx, notCachedUserIds)
+		dbUsers, err := s.UserStore.GetMany(rctx, notCachedUserIds)
 		if err != nil {
 			return nil, err
 		}

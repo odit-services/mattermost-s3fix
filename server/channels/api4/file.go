@@ -17,7 +17,6 @@ import (
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/shared/mlog"
 	"github.com/mattermost/mattermost/server/v8/channels/app"
-	"github.com/mattermost/mattermost/server/v8/channels/audit"
 	"github.com/mattermost/mattermost/server/v8/channels/utils"
 	"github.com/mattermost/mattermost/server/v8/platform/shared/web"
 )
@@ -39,7 +38,8 @@ func (api *API) InitFile() {
 	api.BaseRoutes.File.Handle("/preview", api.APISessionRequiredTrustRequester(getFilePreview)).Methods(http.MethodGet)
 	api.BaseRoutes.File.Handle("/info", api.APISessionRequired(getFileInfo)).Methods(http.MethodGet)
 
-	api.BaseRoutes.Team.Handle("/files/search", api.APISessionRequiredDisableWhenBusy(searchFiles)).Methods(http.MethodPost)
+	api.BaseRoutes.Team.Handle("/files/search", api.APISessionRequiredDisableWhenBusy(searchFilesInTeam)).Methods(http.MethodPost)
+	api.BaseRoutes.Files.Handle("/search", api.APISessionRequiredDisableWhenBusy(searchFilesInAllTeams)).Methods(http.MethodPost)
 
 	api.BaseRoutes.PublicFile.Handle("", api.APIHandler(getPublicFile)).Methods(http.MethodGet, http.MethodHead)
 }
@@ -138,9 +138,9 @@ func uploadFileSimple(c *Context, r *http.Request, timestamp time.Time) *model.F
 		return nil
 	}
 
-	auditRec := c.MakeAuditRecord("uploadFileSimple", audit.Fail)
+	auditRec := c.MakeAuditRecord(model.AuditEventUploadFileSimple, model.AuditStatusFail)
 	defer c.LogAuditRec(auditRec)
-	audit.AddEventParameter(auditRec, "channel_id", c.Params.ChannelId)
+	model.AddEventParameterToAuditRec(auditRec, "channel_id", c.Params.ChannelId)
 
 	if !c.App.SessionHasPermissionToChannel(c.AppContext, *c.AppContext.Session(), c.Params.ChannelId, model.PermissionUploadFile) {
 		c.SetPermissionError(model.PermissionUploadFile)
@@ -148,12 +148,12 @@ func uploadFileSimple(c *Context, r *http.Request, timestamp time.Time) *model.F
 	}
 
 	clientId := r.Form.Get("client_id")
-	audit.AddEventParameter(auditRec, "client_id", clientId)
+	model.AddEventParameterToAuditRec(auditRec, "client_id", clientId)
 
 	creatorId := c.AppContext.Session().UserId
 	if isBookmark, err := strconv.ParseBool(r.URL.Query().Get(model.BookmarkFileOwner)); err == nil && isBookmark {
 		creatorId = model.BookmarkFileOwner
-		audit.AddEventParameter(auditRec, model.BookmarkFileOwner, true)
+		model.AddEventParameterToAuditRec(auditRec, model.BookmarkFileOwner, true)
 	}
 
 	info, appErr := c.App.UploadFileX(c.AppContext, c.Params.ChannelId, c.Params.Filename, r.Body,
@@ -166,7 +166,7 @@ func uploadFileSimple(c *Context, r *http.Request, timestamp time.Time) *model.F
 		c.Err = appErr
 		return nil
 	}
-	audit.AddEventParameterAuditable(auditRec, "file", info)
+	model.AddEventParameterAuditableToAuditRec(auditRec, "file", info)
 
 	fileUploadResponse := &model.FileUploadResponse{
 		FileInfos: []*model.FileInfo{info},
@@ -319,14 +319,14 @@ NextPart:
 			clientId = clientIds[nFiles]
 		}
 
-		auditRec := c.MakeAuditRecord("uploadFileMultipart", audit.Fail)
-		audit.AddEventParameter(auditRec, "channel_id", c.Params.ChannelId)
-		audit.AddEventParameter(auditRec, "client_id", clientId)
+		auditRec := c.MakeAuditRecord(model.AuditEventUploadFileMultipart, model.AuditStatusFail)
+		model.AddEventParameterToAuditRec(auditRec, "channel_id", c.Params.ChannelId)
+		model.AddEventParameterToAuditRec(auditRec, "client_id", clientId)
 
 		creatorId := c.AppContext.Session().UserId
 		if isBookmark {
 			creatorId = model.BookmarkFileOwner
-			audit.AddEventParameter(auditRec, model.BookmarkFileOwner, true)
+			model.AddEventParameterToAuditRec(auditRec, model.BookmarkFileOwner, true)
 		}
 
 		info, appErr := c.App.UploadFileX(c.AppContext, c.Params.ChannelId, filename, part,
@@ -340,7 +340,7 @@ NextPart:
 			c.LogAuditRec(auditRec)
 			return nil
 		}
-		audit.AddEventParameterAuditable(auditRec, "file", info)
+		model.AddEventParameterAuditableToAuditRec(auditRec, "file", info)
 
 		auditRec.Success()
 		c.LogAuditRec(auditRec)
@@ -426,15 +426,15 @@ func uploadFileMultipartLegacy(c *Context, mr *multipart.Reader,
 			clientId = clientIds[i]
 		}
 
-		auditRec := c.MakeAuditRecord("uploadFileMultipartLegacy", audit.Fail)
+		auditRec := c.MakeAuditRecord(model.AuditEventUploadFileMultipartLegacy, model.AuditStatusFail)
 		defer c.LogAuditRec(auditRec)
-		audit.AddEventParameter(auditRec, "channel_id", channelId)
-		audit.AddEventParameter(auditRec, "client_id", clientId)
+		model.AddEventParameterToAuditRec(auditRec, "channel_id", channelId)
+		model.AddEventParameterToAuditRec(auditRec, "client_id", clientId)
 
 		creatorId := c.AppContext.Session().UserId
 		if isBookmark {
 			creatorId = model.BookmarkFileOwner
-			audit.AddEventParameter(auditRec, model.BookmarkFileOwner, true)
+			model.AddEventParameterToAuditRec(auditRec, model.BookmarkFileOwner, true)
 		}
 
 		info, appErr := c.App.UploadFileX(c.AppContext, c.Params.ChannelId, fileHeader.Filename, f,
@@ -449,7 +449,7 @@ func uploadFileMultipartLegacy(c *Context, mr *multipart.Reader,
 			c.LogAuditRec(auditRec)
 			return nil
 		}
-		audit.AddEventParameterAuditable(auditRec, "file", info)
+		model.AddEventParameterAuditableToAuditRec(auditRec, "file", info)
 
 		auditRec.Success()
 		c.LogAuditRec(auditRec)
@@ -471,9 +471,9 @@ func getFile(c *Context, w http.ResponseWriter, r *http.Request) {
 
 	forceDownload, _ := strconv.ParseBool(r.URL.Query().Get("download"))
 
-	auditRec := c.MakeAuditRecord("getFile", audit.Fail)
+	auditRec := c.MakeAuditRecord(model.AuditEventGetFile, model.AuditStatusFail)
 	defer c.LogAuditRec(auditRec)
-	audit.AddEventParameter(auditRec, "force_download", forceDownload)
+	model.AddEventParameterToAuditRec(auditRec, "force_download", forceDownload)
 
 	info, err := c.App.GetFileInfo(c.AppContext, c.Params.FileId)
 	if err != nil {
@@ -481,7 +481,7 @@ func getFile(c *Context, w http.ResponseWriter, r *http.Request) {
 		setInaccessibleFileHeader(w, err)
 		return
 	}
-	audit.AddEventParameterAuditable(auditRec, "file", info)
+	model.AddEventParameterAuditableToAuditRec(auditRec, "file", info)
 
 	channel, err := c.App.GetChannel(c.AppContext, info.ChannelId)
 	if err != nil {
@@ -569,7 +569,7 @@ func getFileLink(c *Context, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	auditRec := c.MakeAuditRecord("getFileLink", audit.Fail)
+	auditRec := c.MakeAuditRecord(model.AuditEventGetFileLink, model.AuditStatusFail)
 	defer c.LogAuditRec(auditRec)
 
 	info, err := c.App.GetFileInfo(c.AppContext, c.Params.FileId)
@@ -578,7 +578,7 @@ func getFileLink(c *Context, w http.ResponseWriter, r *http.Request) {
 		setInaccessibleFileHeader(w, err)
 		return
 	}
-	audit.AddEventParameterAuditable(auditRec, "file", info)
+	model.AddEventParameterAuditableToAuditRec(auditRec, "file", info)
 
 	channel, err := c.App.GetChannel(c.AppContext, info.ChannelId)
 	if err != nil {
@@ -607,7 +607,9 @@ func getFileLink(c *Context, w http.ResponseWriter, r *http.Request) {
 
 	auditRec.Success()
 
-	w.Write([]byte(model.MapToJSON(resp)))
+	if _, err := w.Write([]byte(model.MapToJSON(resp))); err != nil {
+		c.Logger.Warn("Error while writing response", mlog.Err(err))
+	}
 }
 
 func getFilePreview(c *Context, w http.ResponseWriter, r *http.Request) {
@@ -734,7 +736,7 @@ func getPublicFile(c *Context, w http.ResponseWriter, r *http.Request) {
 	web.WriteFileResponse(info.Name, info.MimeType, info.Size, time.Unix(0, info.UpdateAt*int64(1000*1000)), *c.App.Config().ServiceSettings.WebserverMode, fileReader, false, w, r)
 }
 
-func searchFiles(c *Context, w http.ResponseWriter, r *http.Request) {
+func searchFilesInTeam(c *Context, w http.ResponseWriter, r *http.Request) {
 	c.RequireTeamId()
 	if c.Err != nil {
 		return
@@ -745,6 +747,14 @@ func searchFiles(c *Context, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	searchFiles(c, w, r, c.Params.TeamId)
+}
+
+func searchFilesInAllTeams(c *Context, w http.ResponseWriter, r *http.Request) {
+	searchFiles(c, w, r, "")
+}
+
+func searchFiles(c *Context, w http.ResponseWriter, r *http.Request, teamID string) {
 	var params model.SearchParameter
 	jsonErr := json.NewDecoder(r.Body).Decode(&params)
 	if jsonErr != nil {
@@ -785,7 +795,7 @@ func searchFiles(c *Context, w http.ResponseWriter, r *http.Request) {
 
 	startTime := time.Now()
 
-	results, err := c.App.SearchFilesInTeamForUser(c.AppContext, terms, c.AppContext.Session().UserId, c.Params.TeamId, isOrSearch, includeDeletedChannels, timeZoneOffset, page, perPage)
+	results, err := c.App.SearchFilesInTeamForUser(c.AppContext, terms, c.AppContext.Session().UserId, teamID, isOrSearch, includeDeletedChannels, timeZoneOffset, page, perPage)
 
 	elapsedTime := float64(time.Since(startTime)) / float64(time.Second)
 	metrics := c.App.Metrics()

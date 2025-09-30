@@ -202,6 +202,11 @@ func (a *App) CreateRemoteClusterInvite(remoteId, siteURL, token, password strin
 		RemoteId: remoteId,
 		SiteURL:  siteURL,
 		Token:    token,
+		Version:  3,
+	}
+
+	if err := invite.IsValid(); err != nil {
+		return "", model.NewAppError("CreateRemoteClusterInvite", "api.remote_cluster.create_invite_error", nil, "", http.StatusInternalServerError).Wrap(err)
 	}
 
 	encrypted, err := invite.Encrypt(password)

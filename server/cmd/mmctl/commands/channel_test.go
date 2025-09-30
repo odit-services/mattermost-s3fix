@@ -884,8 +884,8 @@ func (s *MmctlUnitTestSuite) TestListChannelsCmd() {
 		publicChannel2 := &model.Channel{Name: "publicChannelName2"}
 		publicChannels := []*model.Channel{publicChannel1, publicChannel2}
 
-		privateChannel1 := &model.Channel{Name: "archivedChannelName1"}
-		privateChannel2 := &model.Channel{Name: "archivedChannelName2"}
+		privateChannel1 := &model.Channel{Name: "privateChannel1"}
+		privateChannel2 := &model.Channel{Name: "privateChannel2"}
 		privateChannels := []*model.Channel{privateChannel1, privateChannel2}
 		userChannels := []*model.Channel{}
 
@@ -964,8 +964,8 @@ func (s *MmctlUnitTestSuite) TestListChannelsCmd() {
 		archivedChannel1 := &model.Channel{Name: "archivedChannelName1"}
 		publicChannel1 := &model.Channel{Name: "publicChannelName1"}
 
-		privateChannel1 := &model.Channel{Name: "archivedChannelName1", Type: model.ChannelTypePrivate}
-		privateChannel2 := &model.Channel{Name: "archivedChannelName2", Type: model.ChannelTypePrivate}
+		privateChannel1 := &model.Channel{Name: "privateChannel1", Type: model.ChannelTypePrivate}
+		privateChannel2 := &model.Channel{Name: "privateChannel2", Type: model.ChannelTypePrivate}
 		userChannels := []*model.Channel{archivedChannel1, publicChannel1, privateChannel1, privateChannel2}
 
 		mockError := errors.New("user does not have permissions to list all private channels in team")
@@ -1912,7 +1912,6 @@ func (s *MmctlUnitTestSuite) TestRenameChannelCmd() {
 
 		cmd.Flags().String("name", "", "Channel Name")
 		cmd.Flags().String("display-name", "", channelDisplayName)
-		cmd.Flags().String("display_name", "", "")
 
 		err := renameChannelCmdF(s.client, cmd, args)
 		s.Require().EqualError(err, "require at least one flag to rename channel, either 'name' or 'display-name'")
@@ -2275,7 +2274,6 @@ func (s *MmctlUnitTestSuite) TestRenameChannelCmd() {
 		newChannelDisplayName := ""
 		cmd.Flags().String("name", newChannelName, "Channel Name")
 		cmd.Flags().String("display-name", newChannelDisplayName, channelDisplayName)
-		cmd.Flags().String("display_name", "", "")
 
 		foundTeam := &model.Team{
 			Id:          teamID,
@@ -2577,7 +2575,7 @@ func (s *MmctlUnitTestSuite) TestCreateChannelCmd() {
 		cmd.Flags().String("name", channelName, "Channel Name")
 
 		err := createChannelCmdF(s.client, cmd, args)
-		s.Require().EqualError(err, "display Name is required")
+		s.Require().EqualError(err, "display-name is required")
 	})
 
 	s.Run("should not create channel without name", func() {
